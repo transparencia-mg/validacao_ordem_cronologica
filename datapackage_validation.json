@@ -1,0 +1,141 @@
+{
+  "version": "4.16.6",
+  "time": 1.26,
+  "errors": [],
+  "tasks": [
+    {
+      "resource": {
+        "description": "Insira a descrição/explicação detalhada deste recurso.",
+        "dialect": {
+          "delimiter": ";"
+        },
+        "encoding": "utf-8-sig",
+        "format": "csv",
+        "hashing": "md5",
+        "name": "pagamentos2026",
+        "path": "data/pagamentos2026.csv",
+        "profile": "tabular-data-resource",
+        "schema": {
+          "fields": [
+            {
+              "name": "ano",
+              "type": "integer"
+            },
+            {
+              "name": "mes",
+              "type": "string"
+            },
+            {
+              "name": "codigo_uo",
+              "type": "integer"
+            },
+            {
+              "name": "unidade_uo",
+              "type": "string"
+            },
+            {
+              "name": "elemento_despesa",
+              "type": "string"
+            },
+            {
+              "name": "item_despesa",
+              "type": "string"
+            },
+            {
+              "name": "codigo_fonte",
+              "type": "integer"
+            },
+            {
+              "name": "descricao_fonte",
+              "type": "string"
+            },
+            {
+              "name": "numero_empenho",
+              "type": "integer"
+            },
+            {
+              "name": "data_empenho",
+              "type": "string"
+            },
+            {
+              "name": "cnpj_cpf",
+              "type": "string"
+            },
+            {
+              "name": "razao_social_credor",
+              "type": "string"
+            },
+            {
+              "name": "sequencial_liquidacao",
+              "type": "integer"
+            },
+            {
+              "name": "data_liquidacao",
+              "type": "string"
+            },
+            {
+              "name": "valor_despesa_realizada",
+              "type": "string"
+            },
+            {
+              "name": "id_liq",
+              "type": "integer"
+            },
+            {
+              "name": "data_pagamento",
+              "type": "string"
+            },
+            {
+              "name": "quebra",
+              "type": "any"
+            },
+            {
+              "name": "justificativa",
+              "type": "any"
+            }
+          ]
+        },
+        "scheme": "file",
+        "title": "Insira um título humanamente legível para este recurso.",
+        "stats": {
+          "hash": "88d5424217bfb6735470ea4369404ad9",
+          "bytes": 11484978,
+          "fields": 19,
+          "rows": 38111
+        }
+      },
+      "time": 1.234,
+      "scope": [
+        "hash-count-error",
+        "byte-count-error",
+        "field-count-error",
+        "row-count-error",
+        "blank-header",
+        "extra-label",
+        "missing-label",
+        "blank-label",
+        "duplicate-label",
+        "incorrect-label",
+        "blank-row",
+        "primary-key-error",
+        "foreign-key-error",
+        "extra-cell",
+        "missing-cell",
+        "type-error",
+        "constraint-error",
+        "unique-error"
+      ],
+      "partial": false,
+      "errors": [],
+      "stats": {
+        "errors": 0
+      },
+      "valid": true
+    }
+  ],
+  "stats": {
+    "errors": 0,
+    "tasks": 1
+  },
+  "valid": true
+}
