@@ -1,0 +1,1815 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=yes">
+    <title>Ordem Cronológica de Pagamentos - Transparência MG</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+
+    <style>
+        /* ============================================================
+           1. VARIÁVEIS DE CORES (espelho da relação nominal)
+        ============================================================ */
+        :root {
+            --primary-dark:      #1a3a5c;
+            --primary-darker:    #0f2a44;
+            --accent-red:        #b93c42;
+            --accent-bright:     #db233f;
+            --background-light:  #f5f7fa;
+            --success-green:     #28a745;
+            --warning-yellow:    #ffc107;
+            --info-blue:         #17a2b8;
+        }
+
+        /* ============================================================
+           2. RESET E GLOBALS
+        ============================================================ */
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        html, body { width: 100%; overflow-x: hidden; margin: 0; padding: 0; height: auto; min-height: auto; }
+        body {
+            font-family: 'Montserrat', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--background-light);
+            padding-bottom: 20px;
+            overflow-x: hidden;
+        }
+        body, button, input, select, textarea, span, div { font-family: 'Montserrat', sans-serif !important; }
+        .material-icons { font-family: 'Material Icons' !important; font-size: 14px; vertical-align: middle; }
+
+        /* ============================================================
+           3. LAYOUT
+        ============================================================ */
+        .main-container { height: auto; min-height: auto; overflow: visible; }
+        .container-fluid { width: 100%; max-width: 96% !important; padding: 0 16px; margin: 0 auto; }
+        .tab-content, .tab-pane { width: 100%; height: auto; min-height: auto; overflow: visible; }
+        .table-container { height: auto; min-height: auto; overflow: visible; }
+        .iframe-mode { overflow: visible !important; }
+
+        /* ============================================================
+           4. DATA DE ATUALIZAÇÃO
+        ============================================================ */
+        .data-atualizacao-container { display: flex; justify-content: left; align-items: center; margin: 15px 0; }
+        .data-atualizacao-box {
+            background: transparent !important;
+            border-radius: 8px;
+            padding: 8px 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            color: var(--primary-dark);
+            font-weight: 600;
+        }
+        .data-atualizacao-box i { font-size: 14px; color: var(--accent-red); }
+
+        /* ============================================================
+           5. FILTROS
+        ============================================================ */
+        .filter-container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 3px 12px rgba(0,0,0,0.08);
+            padding: 20px;
+            margin-bottom: 20px;
+            width: 100%;
+        }
+        .filter-label { font-size: 13px; font-weight: 600; color: #1a3a5c; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+        .filter-label .req { color: var(--accent-red); }
+        .filter-label .opt { color: #6c757d; font-size: 10px; font-weight: 400; text-transform: none; }
+        .form-control, .form-select {
+            border: 2px solid #e9ecef;
+            border-radius: 6px;
+            padding: 10px 12px;
+            font-size: 13px;
+            transition: all 0.3s ease;
+            height: auto;
+            width: 100%;
+        }
+        .form-control:focus, .form-select:focus { border-color: var(--accent-red); box-shadow: 0 0 0 2px rgba(185,60,66,0.15); }
+        .form-select:disabled { background: #f0f2f5; opacity: .65; cursor: not-allowed; }
+        .filters-row { display: flex; gap: 15px; width: 100%; flex-wrap: wrap; }
+        .filter-group { flex: 1; min-width: 120px; }
+        .botoes-abaixo { margin-top: 15px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+        /* STEPS */
+        .steps { display: flex; gap: 0; margin-top: 14px; flex-wrap: wrap; gap: 8px; }
+        .step { display: flex; align-items: center; gap: 6px; font-size: 12px; color: #6c757d; }
+        .step-num { width: 22px; height: 22px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+        .step-num.done { background: #20445d; color: #fff; }
+        .step-num.pend { background: #dee2e6; color: #6c757d; }
+        .step-num.req  { background: var(--accent-red); color: #fff; }
+        .step-sep { width: 24px; height: 2px; background: #dee2e6; margin: 0 4px; }
+
+        /* ALERTA */
+        .alerta-info { background: #e8f0fe; border: 1px solid #c2d3fc; border-radius: 8px; padding: 14px 18px; font-size: 13px; color: #1a3a5c; display: flex; align-items: flex-start; gap: 10px; margin-top: 12px; }
+        .alerta-info .material-icons { font-size: 20px; flex-shrink: 0; }
+
+        /* ============================================================
+           6. CARDS DE MÉTRICAS
+        ============================================================ */
+        .metric-card {
+            background: white;
+            border-radius: 8px;
+            border: 1px solid #e5e9ef;
+            box-shadow: 0 3px 12px rgba(0,0,0,0.06);
+            overflow: hidden;
+            height: 100%;
+            transition: box-shadow 0.25s ease, transform 0.25s ease;
+        }
+        .metric-card:hover { box-shadow: 0 8px 24px rgba(26,58,92,0.13); transform: translateY(-2px); }
+        .metric-header {
+            background: #20445d;
+            color: white;
+            font-size: 12px;
+            font-weight: 700;
+            padding: 7px 14px;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        .metric-body { padding: 10px 14px; }
+        .metric-value { font-size: 18px; font-weight: 700; color: #1a3a5c; }
+        .metric-sublabel { font-size: 11px; color: #6c757d; margin-top: 2px; }
+
+        /* ============================================================
+           7. TABELAS
+        ============================================================ */
+        .table-fixed-header-container { position: relative; overflow: auto; width: 100%; max-height: 600px; }
+        .tbl-wrap { overflow-x: auto; border-radius: 10px 10px 0 0; background: #fff; box-shadow: 0 3px 12px rgba(0,0,0,0.06); }
+        table.tbl { width: 100%; font-size: 12px; border-collapse: collapse; }
+        table.tbl th {
+            background: #54697b !important;
+            color: #fff !important;
+            padding: 9px 8px;
+            font-weight: 600;
+            white-space: nowrap;
+            border: 1px solid #d6dee6;
+            cursor: pointer;
+            user-select: none;
+            text-align: center;
+            font-size: 12px;
+            text-transform: uppercase;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        table.tbl th:hover { background: #3d5566 !important; }
+        table.tbl th.asc::after  { content: ' ↑'; font-size: 11px; }
+        table.tbl th.desc::after { content: ' ↓'; font-size: 11px; }
+        table.tbl td { padding: 7px 8px; border: 1px solid #d6dee6; vertical-align: middle; }
+        table.tbl td.r { text-align: right; }
+        table.tbl td.c { text-align: center; }
+        table.tbl tbody tr:hover { background: rgba(41,67,90,0.04); }
+        table.tbl tbody tr.warn-row { background: #fff5f5; }
+        table.tbl tfoot td { background: #dfe3e8 !important; font-weight: 700; border-top: 2px solid #1a3a5c; font-size: 12px; }
+
+        /* ============================================================
+           8. BOTÕES
+        ============================================================ */
+        .btn-pesquisa {
+            background: linear-gradient(to right, #20445d, #20445d);
+            border: none;
+            padding: 0 16px;
+            font-weight: 600;
+            border-radius: 6px;
+            font-size: 13px;
+            color: white;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            height: 36px;
+            white-space: nowrap;
+            transition: all 0.3s ease;
+        }
+        .btn-pesquisa:hover { background: linear-gradient(to right, var(--accent-red), #a32c32); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(185,60,66,0.2); color: white; }
+        .btn-secondary-custom {
+            background: white;
+            border: 2px solid var(--primary-darker);
+            color: var(--primary-darker);
+            padding: 0 16px;
+            font-weight: 600;
+            font-size: 13px;
+            border-radius: 6px;
+            transition: all 0.3s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            height: 36px;
+            white-space: nowrap;
+            text-decoration: none !important;
+        }
+        .btn-secondary-custom:hover { background-color: #132837 !important; color: white !important; border-color: #132837 !important; }
+        .btn-export {
+            appearance: none;
+            -webkit-appearance: none;
+            background: transparent !important;
+            border: 1px solid #d6dee6;
+            color: #1a3a5c;
+            padding: 0 14px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            height: 32px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .btn-export i { font-size: 14px !important; }
+        .btn-export:hover { background-color: #1a3a5c !important; border-color: #1a3a5c !important; color: #ffffff !important; }
+        .btn-topo {
+            background: #eeeff5;
+            color: #1a3a5c;
+            border: 1px solid #d6dee6;
+            border-radius: 12px;
+            padding: 0 16px;
+            font-size: 13px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            cursor: pointer;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+            transition: all 0.3s ease;
+            height: 32px;
+        }
+        .btn-topo:hover { background-color: #1a3a5c; color: #ffffff; border-color: #1a3a5c; }
+
+        /* ============================================================
+           9. NAVEGAÇÃO (abas)
+        ============================================================ */
+        .nav-tabs-container { background: transparent; padding: 10px 0; margin-top: 15px; margin-bottom: 5px; width: 100%; }
+        .nav-tabs { border: none !important; gap: 10px; width: 100%; flex-wrap: wrap; }
+        .nav-tabs .nav-link {
+            border: none !important;
+            background: #ffffff !important;
+            border-radius: 10px !important;
+            padding: 8px 18px !important;
+            font-weight: 500;
+            font-size: 14px;
+            color: #1a3a5c !important;
+            display: inline-flex !important;
+            align-items: center;
+            gap: 6px;
+            transition: all .25s ease;
+        }
+        .nav-tabs .nav-link:hover { background: #e6e9ed !important; }
+        .nav-tabs .nav-link.active { background: #234c63 !important; color: #fff !important; box-shadow: 0 4px 10px rgba(0,0,0,0.15); }
+        .nav-tabs .material-icons { font-size: 14px !important; }
+
+        /* ============================================================
+           10. TOOLBAR
+        ============================================================ */
+        .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+        .toolbar-left  { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .toolbar-right { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .table-badge { background: #1a3a5c; color: white; padding: 5px 12px; border-radius: 12px; font-size: 12px; font-weight: 600; white-space: nowrap; }
+        .table-search-container {
+            display: flex;
+            align-items: center;
+            white-space: nowrap;
+            background: #ffffff;
+            border: 1px solid #d6dee6;
+            border-radius: 8px;
+            padding: 5px 10px;
+            height: 34px;
+        }
+        .table-search-container:hover { border-color: #1a3a5c; }
+        .table-search-input {
+            border: none !important;
+            outline: none;
+            background: transparent;
+            font-size: 12px;
+            width: 220px;
+            color: #1a3a5c;
+        }
+        .table-search-input::placeholder { color: #94a3b8; }
+
+        /* ============================================================
+           11. PAGINAÇÃO
+        ============================================================ */
+        .pag-bar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 14px;
+            background: #fff;
+            border: 1px solid #dee2e6;
+            border-top: none;
+            border-radius: 0 0 10px 10px;
+            flex-wrap: wrap;
+            gap: 8px;
+            box-shadow: 0 3px 12px rgba(0,0,0,0.06);
+            margin-bottom: 20px;
+            font-size: 12px;
+            color: #6c757d;
+        }
+        .pagination .page-link { color: var(--primary-dark); border-color: #dee2e6; font-size: 13px; padding: 4px 10px; }
+        .pagination .page-link:hover { color: var(--accent-red); background-color: #f8f9fa; }
+        .pagination .page-item.active .page-link { background-color: var(--primary-dark); border-color: var(--primary-dark); color: white; }
+        .items-per-page {
+            height: 31px;
+            min-width: 130px;
+            border-radius: 6px;
+            border: 1px solid #d6dee6;
+            padding: 3px 7px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #1a3a5c;
+            background-color: #fff;
+            cursor: pointer;
+        }
+
+        /* ============================================================
+           12. MODAL
+        ============================================================ */
+        .modal-creative .modal-header {
+            background: linear-gradient(135deg, var(--primary-dark) 0%, var(--primary-darker) 100%);
+            color: white !important;
+            padding: 15px 20px;
+            border-bottom: none;
+        }
+        .modal-creative .modal-header .modal-title { color: white !important; font-weight: 600; font-size: 14px; display: flex; align-items: center; gap: 8px; }
+        .modal-creative .modal-header .btn-close { filter: brightness(0) invert(1); opacity: 1; }
+        .i-sec { background: #f8fafd; border-radius: 10px; padding: 13px 16px; margin-bottom: 13px; border: 1px solid #e2e8f0; border-left: 4px solid #1a3a5c; }
+        .i-sec h6 { font-weight: 700; color: #1a3a5c; margin-bottom: 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; }
+        .i-row { display: flex; padding: 5px 0; border-bottom: 1px solid #f0f4f8; }
+        .i-row:last-child { border-bottom: none; }
+        .i-lbl { width: 42%; font-weight: 600; color: #64748b; font-size: 11px; }
+        .i-val { width: 58%; color: #1e293b; font-size: 11px; font-weight: 500; word-break: break-word; }
+
+        /* Badges */
+        .badge-ok  { background: #dcf5e7; color: #0f6b3a; border: 1px solid #b2e6c8; padding: 3px 8px; border-radius: 20px; font-size: 10.5px; font-weight: 700; display: inline-block; }
+        .badge-err { background: #fde8ea; color: #8b1a22; border: 1px solid #f5b8bc; padding: 3px 8px; border-radius: 20px; font-size: 10.5px; font-weight: 700; display: inline-block; }
+        .r-link { color: #006a82; font-weight: 600; cursor: pointer; }
+        .r-link:hover { color: var(--accent-red); text-decoration: underline; }
+
+        /* ============================================================
+           13. LOADING
+        ============================================================ */
+        .loading-overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(238,241,246,0.95);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .loading-progress { font-size: 13px; color: #20445d; font-weight: 700; }
+
+        /* ============================================================
+           14. TOAST
+        ============================================================ */
+        .toast-sucesso {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #e6f4ea;
+            color: #1e4620;
+            border-radius: 12px;
+            padding: 14px 20px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            z-index: 9999;
+            min-width: 280px;
+        }
+        .toast-content { display: flex; align-items: center; justify-content: center; width: 100%; text-align: center; gap: 10px; }
+        .toast-close { cursor: pointer; font-size: 14px; margin-left: 10px; }
+        @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px) translateX(-50%); } to { opacity: 1; transform: translateY(0) translateX(-50%); } }
+
+        /* ============================================================
+           15. LEGENDA
+        ============================================================ */
+        .legenda {
+            background: #f8f9fa;
+            border-radius: 8px;
+            border: 1px solid #e9ecef;
+            padding: 8px 14px;
+            margin-bottom: 14px;
+            font-size: 12px;
+            display: flex;
+            gap: 18px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        /* ============================================================
+           16. RESPONSIVIDADE
+        ============================================================ */
+        /* ============================================================
+           17. DOWNLOADS
+        ============================================================ */
+        .dl-section-title {
+            display: flex; align-items: center; gap: 8px;
+            font-size: 13px; font-weight: 700; color: #20445d;
+            margin-bottom: 10px; padding-bottom: 8px;
+            border-bottom: 2px solid #e9ecef;
+        }
+        .dl-desc { font-size: 11px; color: #6c757d; margin-left: 4px; }
+        .dl-btn-group { display: flex; flex-wrap: wrap; gap: 8px; }
+        .btn-dl {
+            background: transparent;
+            border: 1px solid #d6dee6;
+            color: #1a3a5c;
+            padding: 0 14px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            height: 34px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+        .btn-dl:hover { background-color: #1a3a5c; border-color: #1a3a5c; color: #fff; }
+        .btn-dl:disabled { opacity: 0.5; cursor: not-allowed; }
+        .dl-portal-banner {
+            background: linear-gradient(135deg, #1a3a5c, #20445d);
+            border-radius: 10px;
+            padding: 18px 22px;
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            flex-wrap: wrap;
+            margin-bottom: 20px;
+        }
+        .dl-portal-text { flex: 1; min-width: 200px; }
+        .dl-portal-text p { color: rgba(255,255,255,0.8); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
+        .dl-portal-text span { color: #fff; font-size: 13px; }
+        .btn-portal {
+            background: white;
+            color: #1a3a5c;
+            font-weight: 700;
+            font-size: 12px;
+            border: none;
+            border-radius: 8px;
+            padding: 0 20px;
+            height: 40px;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            text-decoration: none;
+            flex-shrink: 0;
+            transition: all 0.2s ease;
+        }
+        .btn-portal:hover { background: #f0f4f8; color: #1a3a5c; }
+        @keyframes spinDl { to { transform: rotate(360deg); } }
+        .spin { animation: spinDl 1s linear infinite; display: inline-block; }
+
+        /* ============================================================
+           18. DICIONÁRIO DE DADOS
+        ============================================================ */
+        .dic-header-box {
+            background: #20445d;
+            color: white;
+            padding: 10px 16px;
+            border-radius: 8px 8px 0 0;
+            font-size: 12px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .dic-count-badge {
+            margin-left: auto;
+            background: rgba(255,255,255,0.2);
+            padding: 2px 10px;
+            border-radius: 10px;
+            font-size: 11px;
+        }
+        .dic-table-wrap {
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-top: none;
+            border-radius: 0 0 8px 8px;
+            overflow: hidden;
+            margin-bottom: 20px;
+        }
+        table.dic-tbl { width: 100%; border-collapse: collapse; font-size: 12px; }
+        table.dic-tbl thead th {
+            background: #54697b !important;
+            color: white !important;
+            padding: 9px 10px;
+            font-size: 11px;
+            text-transform: uppercase;
+            font-weight: 600;
+            border: 1px solid #d6dee6;
+        }
+        table.dic-tbl tbody tr:nth-child(even) { background: #f8fafd; }
+        table.dic-tbl tbody td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #f0f4f8;
+            vertical-align: top;
+            color: #334155;
+            font-size: 12px;
+        }
+        table.dic-tbl tbody tr:hover { background: rgba(26,58,92,0.04); }
+        table.dic-tbl tbody tr.dic-highlight { background: #fff8dc !important; }
+        .dic-code { background: #e2e8f0; color: #0f172a; padding: 2px 6px; border-radius: 4px; font-size: 11px; font-family: monospace; }
+        .dic-tipo { background: #e2e8f0; color: #475569; padding: 2px 7px; border-radius: 4px; font-size: 10px; font-weight: 600; }
+        .dic-tag {
+            color: white;
+            padding: 2px 10px;
+            border-radius: 12px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+        .dic-search-bar {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: white;
+            border-radius: 8px;
+            padding: 14px 18px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            margin-bottom: 18px;
+            flex-wrap: wrap;
+        }
+
+        /* Tooltip global dicionário */
+        #dicTooltipPopup {
+            position: fixed;
+            background: #1a3a5c;
+            color: #fff;
+            font-size: 11px;
+            font-weight: 400;
+            white-space: normal;
+            min-width: 180px;
+            max-width: 280px;
+            padding: 7px 10px;
+            border-radius: 6px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.40);
+            pointer-events: none;
+            opacity: 0;
+            transition: opacity 0.15s ease;
+            z-index: 999999;
+            line-height: 1.45;
+        }
+        #dicTooltipPopup.visible { opacity: 1; }
+        #dicTooltipPopup::after {
+            content: '';
+            position: absolute;
+            top: 100%; left: 50%;
+            transform: translateX(-50%);
+            border: 5px solid transparent;
+            border-top-color: #1a3a5c;
+        }
+        .dic-th-icon {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 14px; height: 14px; border-radius: 50%;
+            background: rgba(255,255,255,0.25); color: #fff;
+            font-size: 9px; font-weight: 700;
+            cursor: help; margin-left: 4px; vertical-align: middle;
+            border: 1px solid rgba(255,255,255,0.5);
+        }
+
+        @media (max-width: 768px) {
+            .filters-row { flex-direction: column; }
+            .filter-group { min-width: 100%; }
+            .toolbar { flex-direction: column; align-items: stretch; }
+            .table-search-input { width: 100% !important; }
+            .steps { flex-wrap: wrap; gap: 8px; }
+            .step-sep { display: none; }
+        }
+    </style>
+</head>
+<body class="iframe-mode">
+
+<div class="main-container">
+    <div class="container-fluid">
+
+        <!-- Navegação por abas -->
+        <div class="nav-tabs-container">
+            <ul class="nav nav-tabs" id="dashTabs" role="tablist">
+                <li class="nav-item">
+                    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-forn" id="btn-forn">
+                        <i class="material-icons">inventory_2</i>Fornecimento de Bens
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-loc" id="btn-loc">
+                        <i class="material-icons">home_work</i>Locações
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-serv" id="btn-serv">
+                        <i class="material-icons">miscellaneous_services</i>Serviços
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-obras" id="btn-obras">
+                        <i class="material-icons">construction</i>Obras
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-dicionario" id="btn-dicionario">
+                        <i class="material-icons">menu_book</i>Dicionário de Dados
+                    </button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-downloads" id="btn-downloads">
+                        <i class="material-icons">download</i>Downloads
+                    </button>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Data de atualização -->
+        <div class="data-atualizacao-container">
+            <div class="data-atualizacao-box">
+                <i class="material-icons">event</i>
+                Data de atualização: <span id="data-atualizacao-header" style="margin-left:4px;">carregando...</span>
+            </div>
+        </div>
+
+        <!-- Conteúdo das abas -->
+        <div class="tab-content" id="dashTabsContent">
+            <div class="tab-pane fade show active" id="tab-forn"><div id="c-forn"></div></div>
+            <div class="tab-pane fade" id="tab-loc"><div id="c-loc"></div></div>
+            <div class="tab-pane fade" id="tab-serv"><div id="c-serv"></div></div>
+            <div class="tab-pane fade" id="tab-obras"><div id="c-obras"></div></div>
+            <div class="tab-pane fade" id="tab-downloads"><div id="c-downloads"></div></div>
+            <div class="tab-pane fade" id="tab-dicionario"><div id="c-dicionario"></div></div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal -->
+<div class="modal fade" id="modalDet" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content modal-creative">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="material-icons">info</i> Detalhes do Empenho</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="modalBody"></div>
+            <div class="modal-footer">
+                <button class="btn-secondary-custom" data-bs-dismiss="modal">
+                    <i class="material-icons">close</i> Fechar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Toast de link copiado -->
+<div id="toastSucesso" class="toast-sucesso">
+    <div class="toast-content">
+        <i class="material-icons">check_circle</i>
+        <span>Link copiado para a área de transferência!</span>
+    </div>
+    <span class="toast-close" onclick="fecharToast()">✖</span>
+</div>
+
+<!-- Tooltip global dicionário -->
+<div id="dicTooltipPopup"></div>
+
+<!-- Loading -->
+<div class="loading-overlay" id="loadOv" style="display:none;">
+    <div class="spinner-border" role="status" style="color:#20445d;width:2.5rem;height:2.5rem;"></div>
+    <div class="loading-progress" id="loadMsg">Carregando dados...</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+
+<script>
+// ================================================================
+// CATEGORIAS
+// ================================================================
+var CATS = {
+    forn: {
+        id:'forn', label:'Fornecimento de Bens', icon:'inventory_2',
+        itens: new Set([
+            'APARELHOS E UTENSILIOS DOMESTICOS','EQUIPAMENTOS DE INFORMATICA',
+            'EQUIPAMENTOS DE PROTECAO, SEGURANCA E SOCORRO','EQUIPAMENTOS DE SEGURANCA ELETRONICA',
+            'EQUIPAMENTOS DE SOM, VIDEO, FOTOGRAFICO E CINEMATOGRAFICO',
+            'EQUIPAMENTOS HOSPITALARES, ODONTOLOGICOS E DE LABORATORIO',
+            'FERRAMENTAS, EQUIP. E INSTRUMENTOS P/ OFICINA, MEDICAO E INSPECAO',
+            'INSTRUMENTOS DE LABORATORIO, MEDICOS E ODONTOLOGICOS',
+            'MAQUINAS, APARELHOS, UTENSILIOS E EQUIPAMENTOS  USO ADMINISTRATIVO',
+            'MOBILIARIO ARTIGOS PARA CONFECCAO E VESTUARIO','ARTIGOS PARA LIMPEZA E HIGIENE',
+            'COMBUSTIVEIS E LUBRIFICANTES P/ EQUIP. E OUTROS MAT.  PERMANENTES',
+            'COMBUSTIVEIS E LUBRIFICANTES PARA AERONAVES',
+            'COMBUSTIVEIS E LUBRIFICANTES PARA VEICULOS AUTOMOTORES',
+            'FERRAMENTAS, FERRAGENS E UTENSILIOS','FORRAGENS E OUTROS ALIMENTOS PARA ANIMAIS',
+            'MATERIAIS DE LABORATORIO E PRODUTOS QUIMICOS EM GERAL',
+            'MATERIAIS PARA ACONDICIONAMENTO E EMBALAGEM','MATERIAL DE CAMA, MESA E BANHO',
+            'MATERIAL DE ENSINO','MATERIAL DE INFORMATICA',
+            'MATERIAL DE SEGURANCA, APETRECHOS OPERACIONAIS E POLICIAIS',
+            'MATERIAL ELETRICO','MATERIAL FOTOGRAFICO, CINEMATOGRAFICO E DE COMUNICACAO',
+            'MATERIAL GRAFICO E IMPRESSOS','MATERIAL MEDICO E HOSPITALAR',
+            'MATERIAL ODONTOLOGICO',
+            'MATERIAL P/ MANUT. E REPAROS DE IMOVEIS DE PROPRIEDADE DA ADM. PUBLICA',
+            'MATERIAL PARA ESCRITORIO','MATERIAL PARA FISIOTERAPIA E TERAPIA OCUPACIONAL',
+            'MATERIAL PARA MANUTENCAO DE VEICULOS AUTOMOTORES','MATERIAL RADIOLOGICO',
+            'MEDICAMENTOS','OUTROS MATERIAIS',
+            'PECAS E ACESSORIOS P/ EQUIP.  E OUTROS MATERIAIS PERMANENTES',
+            'PRODUTOS ALIMENTICIOS','UTENSILIOS PARA COPA, REFEITORIO E COZINHA',
+            'MATERIAL DE CONSUMO'
+        ])
+    },
+    loc: {
+        id:'loc', label:'Locações', icon:'home_work',
+        itens: new Set([
+            'LOCACAO DE BENS IMOVEIS','LOCACAO DE MAQUINAS E EQUIPAMENTOS','LOCACAO DE VEICULOS'
+        ])
+    },
+    serv: {
+        id:'serv', label:'Serviços', icon:'miscellaneous_services',
+        itens: new Set([
+            'LOCACAO DE SERVICOS DE APOIO ADMINISTRATIVO',
+            'LOCACAO DE SERVICOS DE APOIO ADMINISTRATIVO REALIZADOS PELA MGS',
+            'LOCACAO DE SERVICOS DE CONSERVACAO E LIMPEZA',
+            'LOCACAO DE SERVICOS DE CONSERVACAO E LIMPEZA REALIZADOS PELA MGS',
+            'REPARO, MANUTENCAO, E SERVICOS AEROPORTUARIOS PARA AERONAVES',
+            'REPAROS DE EQUIPAMENTOS, INSTALACOES E MATERIAL PERMANENTE',
+            'REPAROS DE VEICULOS','SERVICO DE APOIO ADMINISTRATIVO',
+            'SERVICOS DE AGENCIAMENTO DE VIAGENS','SERVICOS DE CONSERVACAO E LIMPEZA',
+            'SERVICOS DE GERENCIAMENTO E FORNECIMENTO DE COMBUSTIVEL',
+            'SERVICOS DE GERENCIAMENTO, SUPERVISAO E FISCALIZACAO DE OBRAS',
+            'SERVICOS DE MAPEAMENTO E GEORREFERENCIAMENTO',
+            'SERVICOS DE PUBLICACAO E DIVULGACAO','SERVICOS GRAFICOS',
+            'OUTROS SERVICOS PESSOA JURIDICA','FORNECIMENTO DE ALIMENTACAO',
+            'AQUISICAO DE SOFTWARE','DESENVOLVIMENTO DE SOFTWARES',
+            'REDE IP MULTISSERVICOS','SERVICO DE INFORMATICA EXECUTADO PELA PRODEMGE',
+            'SERVICO DE TECNOLOGIA DA INFORMACAO',
+            'OUTROS SERVICOS DE TERCEIROS - PESSOA JURIDICA',
+            'SERVICOS DE TECNOLOGIA DA INFORMACAO E COMUNICACAO',
+            'LOCACAO DE MAQUINAS E EQUIPAMENTOS',
+            'SERVICOS DE CONSULTORIA'
+        ])
+    },
+    obras: {
+        id:'obras', label:'Obras', icon:'construction',
+        itens: new Set([
+            'MATERIAL PARA OBRAS - BENS NAO PATRIMONIAVEIS','REPAROS DE BENS IMOVEIS',
+            'OBRAS E INSTALACOES','SERVICOS DE ENGENHARIA'
+        ])
+    }
+};
+
+var CAT_IDS = ['forn','loc','serv','obras'];
+var MESES_NOME = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+var MESES_NUM = {};
+MESES_NOME.forEach(function(m,i){ MESES_NUM[m.toUpperCase()] = i+1; });
+
+var GITHUB_API  = 'https://api.github.com/repos/transparencia-mg/portal_ordem_cronologica/contents/dataset/data';
+
+var CSV_URLS = {
+    '2026': 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/pagamentos2026.csv',
+    '2025': 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/pagamentos2025.csv',
+    '2024': 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/pagamentos2024.csv',
+    '2023': 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/pagamentos2023.csv'
+};
+
+// ================================================================
+// ESTADO
+// ================================================================
+var dadosBase  = [];
+var dadosOrdem = [];
+var anosCarregados = {};
+Object.keys(CSV_URLS).forEach(function(a){ anosCarregados[a] = false; });
+
+var ST = {};
+CAT_IDS.forEach(function(id){
+    ST[id] = { ano:'', mes:'', uo:'', busca:'', pagina:1, ipp:25, sort:{col:'ORDENACAO',dir:'asc'} };
+});
+
+// ================================================================
+// UTILS
+// ================================================================
+function $id(id){ return document.getElementById(id); }
+
+function showLoad(v, msg){
+    $id('loadOv').style.display = v ? 'flex' : 'none';
+    if(msg) $id('loadMsg').textContent = msg;
+}
+
+function parseDate(s){
+    if(!s) return null;
+    s = String(s).trim().split(' ')[0];
+    if(s.indexOf('/')>=0){ var p=s.split('/'); return p.length===3?new Date(+p[2],+p[1]-1,+p[0]):null; }
+    if(s.indexOf('-')>=0){ var p=s.split('-'); return p.length===3?new Date(+p[0],+p[1]-1,+p[2]):null; }
+    return null;
+}
+function fmtD(s){ var d=parseDate(s); return d?d.toLocaleDateString('pt-BR'):'-'; }
+function fmtM(v){ var n=parseFloat(String(v||'').replace(',','.')); return isNaN(n)?'-':n.toLocaleString('pt-BR',{style:'currency',currency:'BRL'}); }
+function fmtDoc(v){
+    if(!v) return '-';
+    v=String(v).replace(/\D/g,'');
+    if(v.length===11) return v.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/,'$1.$2.$3-$4');
+    if(v.length===14) return v.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,'$1.$2.$3/$4-$5');
+    return v;
+}
+function pNum(v){ return parseFloat(String(v||'').replace(',','.'))||0; }
+function norm(s){ return String(s||'').trim().toUpperCase().replace(/\s+/g,' '); }
+function normMes(mesVal){
+    if(!mesVal) return '';
+    var s = String(mesVal).trim();
+    if(/^\d+$/.test(s)) return s;
+    var n = MESES_NUM[s.toUpperCase()];
+    return n ? String(n) : s;
+}
+function normRow(r){
+    var row = Object.assign({}, r);
+    row._mesNum = normMes(row.mes);
+    if(!row.valor_despesa_liquidada && row.valor_despesa_realizada)
+        row.valor_despesa_liquidada = row.valor_despesa_realizada;
+    if(!row.valor_pago_financeiro)
+        row.valor_pago_financeiro = row.valor_despesa_liquidada || row.valor_despesa_realizada || '';
+    return row;
+}
+
+function iframeUpdateHeight(){
+    try {
+        var h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight) + 10;
+        if(window.parent && window.parent !== window)
+            window.parent.postMessage({iframeHeight:h,height:h,type:'resize'},'*');
+    } catch(e){}
+}
+
+function mostrarToast(){
+    var t = $id('toastSucesso');
+    t.style.display = 'flex';
+    t.style.animation = 'none';
+    t.offsetHeight;
+    t.style.animation = 'fadeInUp 0.3s ease forwards';
+    setTimeout(function(){ t.style.display='none'; }, 3000);
+}
+function fecharToast(){ $id('toastSucesso').style.display='none'; }
+
+function copiarLink(){
+    navigator.clipboard.writeText(window.location.href)
+        .then(mostrarToast)
+        .catch(function(){ alert('Erro ao copiar o link'); });
+}
+
+function voltarAoTopo(){
+    if(window.parent && window.parent !== window)
+        window.parent.scrollTo({top:0,behavior:'smooth'});
+    else
+        window.scrollTo({top:0,behavior:'smooth'});
+}
+
+// ================================================================
+// DATA DE ATUALIZAÇÃO — GitHub API
+// ================================================================
+async function setupAtualizacaoData(){
+    var el = $id('data-atualizacao-header');
+    try {
+        // Tenta pela API da pasta /data
+        var resp = await fetch(GITHUB_API);
+        if(resp.ok){
+            var arquivos = await resp.json();
+            var csvFiles = arquivos
+                .filter(function(f){ return f.name && f.name.match(/^pagamentos\d{4}\.csv$/); })
+                .sort(function(a,b){ return b.name.localeCompare(a.name); });
+
+            if(csvFiles.length > 0){
+                var arqRecente = csvFiles[0].name;
+                // Busca data do commit mais recente para esse arquivo
+                var commitResp = await fetch(
+                    'https://api.github.com/repos/transparencia-mg/portal_ordem_cronologica/commits?path=dataset/data/'+arqRecente+'&per_page=1'
+                );
+                if(commitResp.ok){
+                    var commits = await commitResp.json();
+                    if(commits && commits.length > 0){
+                        el.textContent = new Date(commits[0].commit.committer.date).toLocaleDateString('pt-BR');
+                        return;
+                    }
+                }
+                // Fallback: extrai ano do nome do arquivo
+                el.textContent = arqRecente.replace('pagamentos','').replace('.csv','');
+                return;
+            }
+        }
+    } catch(e){}
+
+    // Fallback final: tenta commit do arquivo 2026
+    try {
+        var r2 = await fetch('https://api.github.com/repos/transparencia-mg/portal_ordem_cronologica/commits?path=dataset/data/pagamentos2026.csv&per_page=1');
+        if(r2.ok){
+            var c2 = await r2.json();
+            if(c2 && c2.length > 0){
+                el.textContent = new Date(c2[0].commit.committer.date).toLocaleDateString('pt-BR');
+                return;
+            }
+        }
+    } catch(e){}
+    el.textContent = 'Não disponível';
+}
+
+// ================================================================
+// CARGA — carrega um único ano do CSV
+// ================================================================
+async function carregarAno(ano){
+    if(anosCarregados[ano]) return;
+    var url = CSV_URLS[ano];
+    if(!url) return;
+    try {
+        var resultado = await new Promise(function(res){
+            Papa.parse(url,{
+                download:true, header:true, delimiter:';', skipEmptyLines:true,
+                complete:function(r){ res(r.data); },
+                error:function(){ res([]); }
+            });
+        });
+        resultado.forEach(function(row){
+            var temPag = row.data_pagamento && row.data_pagamento.trim()!=='';
+            var valStr = row.valor_pago_financeiro || row.valor_despesa_realizada || row.valor_despesa_liquidada || '';
+            var val = pNum(valStr);
+            if(temPag && val > 0){
+                dadosBase.push(normRow(row));
+            }
+        });
+        anosCarregados[ano] = true;
+    } catch(e) {}
+}
+
+// ================================================================
+// INIT — carrega apenas o ano atual
+// ================================================================
+async function init(){
+    showLoad(true, 'Carregando dados...');
+
+    // Detecta data de atualização em paralelo
+    setupAtualizacaoData();
+
+    var anoAtual = String(new Date().getFullYear());
+    var anoInicial = CSV_URLS[anoAtual] ? anoAtual : Object.keys(CSV_URLS).sort(function(a,b){return +b-+a;})[0];
+
+    await carregarAno(anoInicial);
+    calcOrdem();
+    CAT_IDS.forEach(function(id){ ST[id].ano = anoInicial; });
+
+    showLoad(false);
+    CAT_IDS.forEach(function(id){ renderAba(id); });
+    CAT_IDS.forEach(function(id){
+        $id('btn-'+id).addEventListener('shown.bs.tab', function(){ renderAba(id); });
+    });
+
+    // Listeners para abas estáticas (Downloads e Dicionário)
+    $id('btn-downloads').addEventListener('shown.bs.tab', function(){ renderDownloads(); });
+    $id('btn-dicionario').addEventListener('shown.bs.tab', function(){ renderDicionario(); });
+}
+
+// ================================================================
+// LÓGICA DE ORDENAÇÃO CRONOLÓGICA
+// ================================================================
+function parseDataBR(dataStr){
+    if(!dataStr) return null;
+    var s = String(dataStr).trim().split(' ')[0];
+    if(s.indexOf('/')>=0){ var p=s.split('/'); return p.length===3?new Date(+p[2],+p[1]-1,+p[0]):null; }
+    if(s.indexOf('-')>=0){ var p=s.split('-'); return p.length===3?new Date(+p[0],+p[1]-1,+p[2]):null; }
+    return null;
+}
+
+function calcOrdem(){
+    dadosOrdem = dadosBase.map(function(r){ return Object.assign({}, r, {ORDENACAO:0}); });
+    var grupos = {};
+    dadosOrdem.forEach(function(r, idx){
+        var categoria = '';
+        for(var i=0;i<CAT_IDS.length;i++){
+            if(CATS[CAT_IDS[i]].itens.has(norm(r.item_despesa))){ categoria=CAT_IDS[i]; break; }
+        }
+        if(!categoria){
+            for(var i=0;i<CAT_IDS.length;i++){
+                if(CATS[CAT_IDS[i]].itens.has(norm(r.elemento_despesa))){ categoria=CAT_IDS[i]; break; }
+            }
+        }
+        var k = (r.ano||'')+'|'+(r.codigo_uo||'')+'|'+categoria;
+        if(!grupos[k]) grupos[k]=[];
+        grupos[k].push({r:r, idx:idx});
+    });
+    Object.keys(grupos).forEach(function(k){
+        var itens = grupos[k];
+        itens.sort(function(a,b){
+            var dl1=parseDataBR(a.r.data_liquidacao), dl2=parseDataBR(b.r.data_liquidacao);
+            if(dl1&&dl2){ var d=dl1.getTime()-dl2.getTime(); if(d!==0) return d; }
+            else if(dl1) return -1; else if(dl2) return 1;
+            var dp1=parseDataBR(a.r.data_pagamento), dp2=parseDataBR(b.r.data_pagamento);
+            if(dp1&&dp2){ var d2=dp1.getTime()-dp2.getTime(); if(d2!==0) return d2; }
+            else if(dp1) return -1; else if(dp2) return 1;
+            return Number(a.r.numero_empenho||0)-Number(b.r.numero_empenho||0);
+        });
+        itens.forEach(function(item,index){ dadosOrdem[item.idx].ORDENACAO=index+1; });
+    });
+}
+
+// ================================================================
+// FILTRAR POR CATEGORIA
+// ================================================================
+function dadosCat(catId){
+    var cat=CATS[catId];
+    return dadosOrdem.filter(function(r){
+        if(cat.itens.has(norm(r.item_despesa))) return true;
+        if(!r.item_despesa||r.item_despesa.trim()==='') return cat.itens.has(norm(r.elemento_despesa));
+        return false;
+    });
+}
+
+// ================================================================
+// RENDER ABA
+// ================================================================
+function renderAba(catId){
+    var st  = ST[catId];
+    var cat = CATS[catId];
+    var todos = dadosCat(catId);
+
+    var anos = Object.keys(CSV_URLS).sort(function(a,b){return +b-+a;});
+    var anoSel = st.ano || anos[0] || '';
+
+    // Meses disponíveis para o ano
+    var mSet={}, meses=[];
+    todos.filter(function(r){return String(r.ano)===anoSel;})
+         .forEach(function(r){
+             var mn=r._mesNum||normMes(r.mes);
+             if(mn&&!mSet[mn]){mSet[mn]=1;meses.push(mn);}
+         });
+    meses.sort(function(a,b){return +a-+b;});
+    var mesSel = st.mes;
+
+    // UOs disponíveis para ano (+ opcionalmente mês)
+    var uoMap = {};
+    var dadosAnoMes = todos.filter(function(r){
+        if(String(r.ano)!==anoSel) return false;
+        // Se mês estiver selecionado no filtro de UO, restringe
+        if(mesSel && r._mesNum!==mesSel && normMes(r.mes)!==mesSel) return false;
+        return true;
+    });
+    dadosAnoMes.forEach(function(r){ if(!uoMap[r.codigo_uo]) uoMap[r.codigo_uo]=r.unidade_uo||r.codigo_uo; });
+    var uoKeys = Object.keys(uoMap).sort(function(a,b){return (uoMap[a]||'').localeCompare(uoMap[b]||'','pt-BR');});
+    var uoSel  = st.uo;
+    var semUO  = !uoSel;
+
+    var step1 = anoSel ? 'done' : 'pend';
+    var step2 = !semUO ? 'done' : (anoSel ? 'req' : 'pend');
+
+    var dados = [];
+    var pronto = !semUO;
+    if(pronto){
+        dados = dadosAnoMes.filter(function(r){
+            if(r.codigo_uo!==uoSel) return false;
+            if(mesSel && r._mesNum!==mesSel && normMes(r.mes)!==mesSel) return false;
+            return true;
+        });
+        if(st.busca){
+            var b=st.busca.toLowerCase();
+            dados=dados.filter(function(r){
+                return (r.numero_empenho||'').toLowerCase().includes(b)
+                    ||(r.razao_social_credor||'').toLowerCase().includes(b)
+                    ||(r.cnpj_cpf||'').toLowerCase().includes(b);
+            });
+        }
+        dados=sortD(dados,st.sort);
+    }
+
+    var total  = dados.length;
+    var totPag = Math.ceil(total/st.ipp)||1;
+    if(st.pagina>totPag) st.pagina=totPag;
+    var ini = (st.pagina-1)*st.ipp;
+    var pag = dados.slice(ini,ini+st.ipp);
+    var totVal = dados.reduce(function(s,r){return s+pNum(r.valor_pago_financeiro);},0);
+
+    var mesNomeExib = mesSel ? (MESES_NOME[(+mesSel)-1]||mesSel) : 'Ano todo';
+
+    // ---- FILTROS ----
+    var html = '<div class="filter-container">'
+        +'<div class="filters-row">'
+
+        // Ano
+        +'<div class="filter-group" style="flex:0 0 auto;min-width:110px;max-width:140px;">'
+        +'<div class="filter-label">Ano</div>'
+        +'<select class="form-select" id="'+catId+'-ano" onchange="onAno(\''+catId+'\')">'
+        +anos.map(function(a){
+            var label = anosCarregados[a] ? a : a+'&nbsp;↓';
+            return '<option value="'+a+'"'+(a===anoSel?' selected':'')+'>'+label+'</option>';
+        }).join('')
+        +'</select></div>'
+
+        // Mês
+        +'<div class="filter-group" style="flex:0 0 auto;min-width:130px;max-width:180px;">'
+        +'<div class="filter-label">Mês <span class="opt">(opcional)</span></div>'
+        +'<select class="form-select" id="'+catId+'-mes" onchange="onMes(\''+catId+'\')">'
+        +'<option value="">-- Todos --</option>'
+        +meses.map(function(m){
+            var nome=MESES_NOME[(+m)-1]||m;
+            return '<option value="'+m+'"'+(String(m)===mesSel?' selected':'')+'>'+nome+'</option>';
+        }).join('')
+        +'</select></div>'
+
+        // UO
+        +'<div class="filter-group">'
+        +'<div class="filter-label">Unidade Orçamentária <span class="req">*</span></div>'
+        +'<select class="form-select" id="'+catId+'-uo" onchange="onUO(\''+catId+'\')">'
+        +'<option value="">-- Selecione --</option>'
+        +uoKeys.map(function(cod){return '<option value="'+cod+'"'+(cod===uoSel?' selected':'')+'>'+(cod+' — '+uoMap[cod])+'</option>';}).join('')
+        +'</select></div>'
+
+        +'</div>'
+        +'<div class="botoes-abaixo">'
+        +'<button class="btn-pesquisa" onclick="aplicar(\''+catId+'\')">'
+        +'<i class="material-icons">search</i> Pesquisar</button>'
+        +'<button class="btn-secondary-custom" onclick="limpar(\''+catId+'\')">'
+        +'<i class="material-icons">clear</i> Limpar Filtros</button>'
+        +'</div>';
+
+    // Guia de steps quando não pronto
+    if(!pronto){
+        html += '<div class="steps">'
+            +'<div class="step"><span class="step-num '+step1+'">1</span> Ano</div>'
+            +'<div class="step-sep"></div>'
+            +'<div class="step"><span class="step-num '+step2+'">2</span> Unidade Orçamentária</div>'
+            +'<div class="step-sep"></div>'
+            +'<div class="step"><span class="step-num pend">3</span> Pesquisar</div>'
+            +'</div>'
+            +'<div class="alerta-info">'
+            +'<i class="material-icons">info</i>'
+            +'<div>Selecione o <strong>Ano</strong> e a <strong>Unidade Orçamentária</strong> para visualizar os pagamentos de <em>'+cat.label+'</em>.<br>'
+            +'<span style="font-size:12px;color:#6c757d;">O Mês é opcional: sem filtro de mês serão exibidos todos os pagamentos do ano inteiro. A análise cronológica é feita por <strong>Ano + Unidade Orçamentária + Categoria</strong>.</span>'
+            +'</div></div>';
+    }
+
+    html += '</div>';
+
+    // ---- CORPO (só quando pronto) ----
+    if(pronto){
+        var uoNome = uoMap[uoSel]||uoSel;
+
+        // Cards métricas
+        html += '<div class="row g-3 mb-3">'
+            +'<div class="col-6 col-md-3"><div class="metric-card">'
+            +'<div class="metric-header"><i class="material-icons" style="font-size:14px;">receipt_long</i> Empenhos/Liquidações</div>'
+            +'<div class="metric-body"><div class="metric-value">'+total.toLocaleString('pt-BR')+'</div>'
+            +'<div class="metric-sublabel">Com pagamento — '+mesNomeExib+'</div></div>'
+            +'</div></div>'
+
+            +'<div class="col-6 col-md-3"><div class="metric-card">'
+            +'<div class="metric-header"><i class="material-icons" style="font-size:14px;">account_balance_wallet</i> Vl. Pago / Realizado</div>'
+            +'<div class="metric-body"><div class="metric-value" style="font-size:15px;">'+fmtM(totVal)+'</div>'
+            +'<div class="metric-sublabel">Total efetivamente pago</div></div>'
+            +'</div></div>'
+
+            +'<div class="col-6 col-md-3"><div class="metric-card">'
+            +'<div class="metric-header"><i class="material-icons" style="font-size:14px;">business</i> Unidade Orçamentária</div>'
+            +'<div class="metric-body"><div class="metric-value" style="font-size:13px;line-height:1.3;">'+uoSel+'</div>'
+            +'<div class="metric-sublabel" style="font-size:10px;">'+uoNome.substring(0,50)+(uoNome.length>50?'…':'')+'</div></div>'
+            +'</div></div>'
+
+            +'<div class="col-6 col-md-3"><div class="metric-card">'
+            +'<div class="metric-header"><i class="material-icons" style="font-size:14px;">calendar_today</i> Período</div>'
+            +'<div class="metric-body"><div class="metric-value">'+mesNomeExib+'</div>'
+            +'<div class="metric-sublabel">'+anoSel+'</div></div>'
+            +'</div></div>'
+            +'</div>';
+
+        // Toolbar
+        html += '<div class="toolbar">'
+            +'<div class="toolbar-left">'
+            +'<button class="btn-export" onclick="expCSV(\''+catId+'\')">'
+            +'<i class="material-icons">description</i> CSV</button>'
+            +'<button class="btn-export" onclick="expPDF(\''+catId+'\')">'
+            +'<i class="material-icons">print</i> PDF</button>'
+            +'<button class="btn-export" onclick="copiarLink()">'
+            +'<i class="material-icons">link</i> Copiar Link</button>'
+            +'</div>'
+            +'<div class="toolbar-right">'
+            +'<span class="table-badge">'+total.toLocaleString('pt-BR')+' registro(s)</span>'
+            +'<div class="table-search-container">'
+            +'<i class="material-icons" style="font-size:14px;color:#94a3b8;">search</i>'
+            +'<input class="table-search-input" id="'+catId+'-busca"'
+            +' placeholder="Buscar credor, empenho, CNPJ..."'
+            +' value="'+escapeAttr(st.busca)+'"'
+            +' oninput="onBusca(\''+catId+'\',this.value)">'
+            +'</div>'
+            +'</div></div>';
+
+        // Legenda
+        html += '<div class="legenda">'
+            +'<span><span style="color:#28a745;font-size:15px;">✔</span> Ordem cronológica respeitada</span>'
+            +'<span><span style="color:#b93c42;font-size:15px;">⚠</span> Quebra de ordem cronológica</span>'
+            +'</div>';
+
+        // Tabela
+        var s = st.sort;
+        function th(col,label,minW){
+            var cls = s.col===col ? s.dir : '';
+            var style = minW ? 'style="min-width:'+minW+'px"':'';
+            return '<th onclick="sortBy(\''+catId+'\',\''+col+'\')" class="'+cls+'" '+style+'>'+label+'</th>';
+        }
+
+        var linhas = '';
+        if(pag.length===0){
+            linhas='<tr><td colspan="13" class="c text-muted" style="padding:20px 8px;">Nenhum registro encontrado.</td></tr>';
+        } else {
+            pag.forEach(function(r){
+                var temQuebra = String(r.quebra||'').trim().toLowerCase() === 'sim';
+                var ordemHtml = temQuebra
+                    ? '<span style="font-weight:700;color:#b93c42;" title="Quebra de ordem cronológica">'+r.ORDENACAO+'</span>'
+                    : '<span style="font-weight:700;color:#28a745;">'+r.ORDENACAO+'</span>';
+                var rs=JSON.stringify(r).replace(/"/g,'&quot;');
+                var justificativa = escapeHtml(r.justificativa||'');
+                linhas+='<tr>'
+                    +'<td class="c">'+ordemHtml+'</td>'
+                    +'<td class="c"><span class="r-link" onclick=\'abrirDet('+rs+')\'>'+escapeHtml(r.numero_empenho||'-')+'</span></td>'
+                    +'<td class="c">'+fmtD(r.data_empenho)+'</td>'
+                    +'<td style="max-width:160px;white-space:normal;">'+escapeHtml(r.unidade_uo||'-')+'</td>'
+                    +'<td class="c">'+escapeHtml(r.elemento_despesa||'-')+'</td>'
+                    +'<td style="max-width:150px;white-space:normal;">'+escapeHtml(r.item_despesa||'-')+'</td>'
+                    +'<td class="c">'+escapeHtml(r.codigo_fonte||'-')+'</td>'
+                    +'<td class="c">'+fmtDoc(r.cnpj_cpf)+'</td>'
+                    +'<td style="max-width:150px;white-space:normal;">'+escapeHtml(r.razao_social_credor||'-')+'</td>'
+                    +'<td class="c">'+fmtD(r.data_liquidacao)+'</td>'
+                    +'<td class="c">'+fmtD(r.data_pagamento)+'</td>'
+                    +'<td class="r">'+fmtM(r.valor_pago_financeiro)+'</td>'
+                    +'<td style="min-width:280px;max-width:320px;white-space:normal;vertical-align:middle;text-align:center;">'+(temQuebra
+                        ? '<span style="color:#b93c42;font-size:11px;font-weight:600;">&#9888; '+justificativa+'</span>'
+                        : '<span style="color:#28a745;font-size:15px;" title="Ordem cronol&oacute;gica respeitada">&#10004;</span>')+'</td>'
+                    +'</tr>';
+            });
+        }
+
+        var tfoot = total>0
+            ?'<tfoot><tr>'
+            +'<td colspan="9" class="r"><strong>Total da página</strong></td>'
+            +'<td colspan="2"></td>'
+            +'<td class="r"><strong>'+fmtM(totVal)+'</strong></td>'
+            +'<td></td></tr></tfoot>'
+            :'';
+
+        html += '<div class="tbl-wrap">'
+            +'<div class="table-fixed-header-container">'
+            +'<table class="tbl" id="tbl-'+catId+'">'
+            +'<thead><tr>'
+            +'<th onclick="sortBy(\''+catId+'\',\'ORDENACAO\')" class="'+(s.col==='ORDENACAO'?s.dir:'')+'" style="min-width:60px">Ordem</th>'
+            +th('numero_empenho','Nº Empenho',90)
+            +th('data_empenho','Dt. Empenho',90)
+            +th('unidade_uo','Unid. Orçamentária',160)
+            +th('elemento_despesa','Elem. Despesa',110)
+            +th('item_despesa','Item Despesa',130)
+            +th('codigo_fonte','Fonte',60)
+            +th('cnpj_cpf','CNPJ/CPF',110)
+            +th('razao_social_credor','Credor',130)
+            +th('data_liquidacao','Dt. Liquidação',95)
+            +th('data_pagamento','Dt. Pagamento',95)
+            +th('valor_pago_financeiro','Vl. Pago/Realizado',120)
+            +'<th style="cursor:default;min-width:280px">Situação</th>'
+            +'</tr></thead>'
+            +'<tbody>'+linhas+'</tbody>'
+            +tfoot
+            +'</table>'
+            +'</div>'
+            +'</div>';
+
+        // Paginação
+        html += '<div class="pag-bar">'
+            +'<div>Exibindo '+(total===0?0:ini+1)+'–'+Math.min(ini+st.ipp,total)+' de '+total.toLocaleString('pt-BR')+'</div>'
+            +'<div class="d-flex align-items-center gap-2 flex-wrap">'
+            +'<select class="items-per-page" onchange="mudarIPP(\''+catId+'\',this.value)">'
+            +'<option value="25"'+(st.ipp===25?' selected':'')+'>25 / página</option>'
+            +'<option value="50"'+(st.ipp===50?' selected':'')+'>50 / página</option>'
+            +'<option value="100"'+(st.ipp===100?' selected':'')+'>100 / página</option>'
+            +'</select>'
+            +renderPag(catId,totPag)
+            +'</div></div>';
+
+        // Voltar ao topo
+        html += '<div style="display:flex;justify-content:flex-end;margin-top:12px;margin-bottom:8px;">'
+            +'<button class="btn-topo" onclick="voltarAoTopo()">'
+            +'<i class="material-icons">arrow_upward</i> Voltar ao topo</button>'
+            +'</div>';
+    }
+
+    $id('c-'+catId).innerHTML = html;
+    setTimeout(iframeUpdateHeight, 300);
+}
+
+function renderPag(catId,tot){
+    if(tot<=1) return '';
+    var p=ST[catId].pagina;
+    var h='<nav><ul class="pagination pagination-sm mb-0">';
+    h+='<li class="page-item '+(p===1?'disabled':'')+'"><a class="page-link" href="#" onclick="irPag(event,\''+catId+'\','+(p-1)+')">«</a></li>';
+    var s=Math.max(1,p-2), e=Math.min(tot,s+4);
+    if(e-s<4) s=Math.max(1,e-4);
+    for(var i=s;i<=e;i++) h+='<li class="page-item '+(i===p?'active':'')+'"><a class="page-link" href="#" onclick="irPag(event,\''+catId+'\','+i+')">'+i+'</a></li>';
+    h+='<li class="page-item '+(p===tot?'disabled':'')+'"><a class="page-link" href="#" onclick="irPag(event,\''+catId+'\','+(p+1)+')">»</a></li>';
+    h+='</ul></nav>';
+    return h;
+}
+
+// ================================================================
+// ESCAPE HELPERS
+// ================================================================
+function escapeHtml(s){
+    return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+function escapeAttr(s){
+    return String(s||'').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+// ================================================================
+// ORDENAÇÃO
+// ================================================================
+function sortD(dados,s){
+    var col=s.col, dir=s.dir==='asc'?1:-1;
+    var datas=['data_empenho','data_liquidacao','data_pagamento'];
+    var nums=['valor_pago_financeiro','valor_despesa_liquidada','valor_despesa_realizada','ORDENACAO'];
+    return dados.slice().sort(function(a,b){
+        var va=a[col]||'', vb=b[col]||'';
+        if(datas.indexOf(col)>=0){ var da=parseDate(va),db=parseDate(vb); return dir*((da?da.getTime():0)-(db?db.getTime():0)); }
+        if(nums.indexOf(col)>=0){ return dir*(pNum(va)-pNum(vb)); }
+        return dir*String(va).localeCompare(String(vb),'pt-BR');
+    });
+}
+
+// ================================================================
+// EVENTOS
+// ================================================================
+function onAno(id){
+    var anoSel=$id(id+'-ano').value;
+    ST[id].ano=anoSel;
+    ST[id].mes=''; ST[id].uo=''; ST[id].pagina=1;
+    if(anoSel && !anosCarregados[anoSel]){
+        showLoad(true,'Carregando dados de '+anoSel+'...');
+        carregarAno(anoSel).then(function(){
+            calcOrdem();
+            showLoad(false);
+            renderAba(id);
+        });
+    } else {
+        renderAba(id);
+    }
+}
+
+function onMes(id){
+    ST[id].mes=$id(id+'-mes').value;
+    // Ao mudar mês, reseta UO (pois lista de UOs muda) e re-renderiza
+    ST[id].uo=''; ST[id].pagina=1;
+    renderAba(id);
+}
+
+function onUO(id){
+    var el=$id(id+'-uo'); if(el) ST[id].uo=el.value;
+}
+
+function aplicar(id){
+    var anoSel=$id(id+'-ano').value;
+    var mesSel=$id(id+'-mes').value;
+    var uoEl=$id(id+'-uo'); var uoSel=uoEl?uoEl.value:'';
+
+    ST[id].ano=anoSel; ST[id].mes=mesSel; ST[id].uo=uoSel; ST[id].pagina=1;
+
+    if(anoSel && !anosCarregados[anoSel]){
+        showLoad(true,'Carregando dados de '+anoSel+'...');
+        carregarAno(anoSel).then(function(){
+            calcOrdem();
+            showLoad(false);
+            renderAba(id);
+        });
+    } else {
+        renderAba(id);
+    }
+}
+
+function limpar(id){
+    var anoAtual=String(new Date().getFullYear());
+    var ult=CSV_URLS[anoAtual]?anoAtual:Object.keys(CSV_URLS).sort(function(a,b){return +b-+a;})[0];
+    ST[id].ano=ult; ST[id].mes=''; ST[id].uo='';
+    ST[id].busca=''; ST[id].pagina=1;
+    renderAba(id);
+}
+
+let timerBusca = {};
+
+function onBusca(id, v){
+    clearTimeout(timerBusca[id]);
+
+    timerBusca[id] = setTimeout(() => {
+        ST[id].busca = v;
+        ST[id].pagina = 1;
+        renderAba(id);
+    }, 300);
+}
+
+// ================================================================
+// MODAL DETALHE
+// ================================================================
+function abrirDet(r){
+    var temQuebra = String(r.quebra||'').trim().toLowerCase() === 'sim';
+    var situacaoHtml = temQuebra
+        ?'<span class="badge-err">&#9888; Quebra de ordem cronológica</span>'
+        :'<span class="badge-ok">&#10004; Respeitada</span>';
+    var mesNomeModal=MESES_NOME[(+r._mesNum)-1]||r.mes||'-';
+    var justificativa = r.justificativa || 'Não informada';
+
+    $id('modalBody').innerHTML=
+        '<div class="i-sec"><h6>📋 Empenho</h6>'
+        +'<div class="i-row"><div class="i-lbl">Nº Empenho</div><div class="i-val"><strong>'+escapeHtml(r.numero_empenho||'-')+'</strong></div></div>'
+        +'<div class="i-row"><div class="i-lbl">Data do Empenho</div><div class="i-val">'+fmtD(r.data_empenho)+'</div></div>'
+        +'<div class="i-row"><div class="i-lbl">Ano / Mês</div><div class="i-val">'+(r.ano||'-')+' / '+mesNomeModal+'</div></div>'
+        +'<div class="i-row"><div class="i-lbl">Unidade Orçamentária</div><div class="i-val">'+escapeHtml(r.codigo_uo||'-')+' — '+escapeHtml(r.unidade_uo||'-')+'</div></div>'
+        +'<div class="i-row"><div class="i-lbl">Elemento de Despesa</div><div class="i-val">'+escapeHtml(r.elemento_despesa||'-')+'</div></div>'
+        +'<div class="i-row"><div class="i-lbl">Item de Despesa</div><div class="i-val">'+escapeHtml(r.item_despesa||'-')+'</div></div>'
+        +'<div class="i-row"><div class="i-lbl">Fonte</div><div class="i-val">'+escapeHtml(r.codigo_fonte||'-')+(r.descricao_fonte?' — '+escapeHtml(r.descricao_fonte):'')+'</div></div>'
+        +'</div>'
+
+        +'<div class="i-sec"><h6>👤 Credor</h6>'
+        +'<div class="i-row"><div class="i-lbl">CNPJ / CPF</div><div class="i-val">'+fmtDoc(r.cnpj_cpf)+'</div></div>'
+        +'<div class="i-row"><div class="i-lbl">Razão Social</div><div class="i-val">'+escapeHtml(r.razao_social_credor||'-')+'</div></div>'
+        +'</div>'
+
+        +'<div class="i-sec"><h6>💧 Liquidação</h6>'
+        +'<div class="i-row"><div class="i-lbl">Sequencial</div><div class="i-val">'+escapeHtml(r.sequencial_liquidacao||'-')+'</div></div>'
+        +'<div class="i-row"><div class="i-lbl">ID Liquidação</div><div class="i-val">'+(r.id_liq!==undefined?r.id_liq:'-')+'</div></div>'
+        +'<div class="i-row"><div class="i-lbl">Data de Liquidação</div><div class="i-val">'+fmtD(r.data_liquidacao)+'</div></div>'
+        +'<div class="i-row"><div class="i-lbl">Valor Realizado/Liquidado</div><div class="i-val">'+fmtM(r.valor_despesa_liquidada||r.valor_despesa_realizada)+'</div></div>'
+        +'</div>'
+
+        +'<div class="i-sec"><h6>💰 Pagamento</h6>'
+        +'<div class="i-row"><div class="i-lbl">Data de Pagamento</div><div class="i-val"><strong>'+fmtD(r.data_pagamento)+'</strong></div></div>'
+        +'<div class="i-row"><div class="i-lbl">Valor Pago / Realizado</div><div class="i-val"><strong>'+fmtM(r.valor_pago_financeiro)+'</strong></div></div>'
+        +'</div>'
+
+        +'<div class="i-sec" style="border-left-color:'+(temQuebra?'#b93c42':'#28a745')+';">'
+        +'<h6>🔢 Posição na Fila</h6>'
+        +'<div class="i-row"><div class="i-lbl">Ordem sequencial</div><div class="i-val"><strong style="font-size:16px;color:#1a3a5c;">'+(r.ORDENACAO||'-')+'</strong></div></div>'
+        +'<div class="i-row"><div class="i-lbl">Situação</div><div class="i-val">'+situacaoHtml+'</div></div>'
+        +'<div class="i-row"><div class="i-lbl">Critério aplicado</div><div class="i-val" style="font-size:11px;color:#6c757d;">'
+        +'<strong>Grupo:</strong> Ano + Unidade Orçamentária + Categoria (análise anual, sem quebra por mês)<br>'
+        +'<strong>Fila:</strong> data_liquidacao ASC → data_pagamento ASC → numero_empenho ASC<br>'
+        +'<strong>Quebra:</strong> ocorre quando um registro anterior na fila possui data_pagamento maior que o atual.'
+        +'</div></div>'
+        +(temQuebra?'<div class="i-row"><div class="i-lbl">Justificativa</div><div class="i-val" style="font-size:11px;color:#6c757d;">'+escapeHtml(justificativa)+'</div></div>':'')
+        +'</div>';
+
+    new bootstrap.Modal($id('modalDet')).show();
+}
+
+// ================================================================
+// EXPORTAÇÃO
+// ================================================================
+function getDadosFilt(id){
+    var st=ST[id]; var todos=dadosCat(id);
+    var d=todos.filter(function(r){
+        if(String(r.ano)!==st.ano) return false;
+        if(st.uo && r.codigo_uo!==st.uo) return false;
+        if(st.mes && r._mesNum!==st.mes && normMes(r.mes)!==st.mes) return false;
+        return true;
+    });
+    if(st.busca){var b=st.busca.toLowerCase();d=d.filter(function(r){return(r.numero_empenho||'').toLowerCase().includes(b)||(r.razao_social_credor||'').toLowerCase().includes(b);});}
+    return sortD(d,st.sort);
+}
+
+function expCSV(id){
+    var d=getDadosFilt(id); if(!d.length) return;
+    var st=ST[id];
+    var mesStr=st.mes?(MESES_NOME[(+st.mes)-1]||st.mes):'anual';
+    var blob=new Blob(['\uFEFF'+Papa.unparse(d,{delimiter:';'})],{type:'text/csv'});
+    var a=document.createElement('a');a.href=URL.createObjectURL(blob);
+    a.download='pagamentos_'+id+'_'+st.ano+'_'+mesStr+'_'+st.uo+'.csv';a.click();
+}
+
+function expPDF(id){
+    var jp=window.jspdf; if(!jp) return;
+    var st=ST[id]; var cat=CATS[id];
+    var mesStr=st.mes?(MESES_NOME[(+st.mes)-1]||st.mes):'Ano todo';
+    var d=getDadosFilt(id);
+    var doc=new jp.jsPDF({orientation:'landscape'});
+    doc.setFontSize(10);
+    doc.text(cat.label+' — '+mesStr+'/'+st.ano,14,12);
+    doc.autoTable({
+        startY:18,
+        head:[['Ordem','Nº Empenho','Dt. Empenho','Unid. Orçamentária','CNPJ/CPF','Credor','Dt. Liquidação','Dt. Pagamento','Vl. Pago','Situação']],
+        body:d.slice(0,500).map(function(r){return[
+            r.ORDENACAO||'-',r.numero_empenho||'-',fmtD(r.data_empenho),
+            (r.codigo_uo||'-')+' — '+(r.unidade_uo||'-'),
+            fmtDoc(r.cnpj_cpf),r.razao_social_credor||'-',
+            fmtD(r.data_liquidacao),fmtD(r.data_pagamento),
+            fmtM(r.valor_pago_financeiro),
+            String(r.quebra||'').trim().toLowerCase()==='sim'?'Quebra':'OK'
+        ];}),
+        styles:{fontSize:6},
+        headStyles:{fillColor:[32,68,93]},
+        didDrawPage:function(){
+            doc.setFontSize(9);
+            doc.text('Emitido em: '+new Date().toLocaleString('pt-BR'),14,doc.internal.pageSize.height-5);
+        }
+    });
+    doc.save('pagamentos_'+id+'_'+st.ano+'_'+mesStr+'.pdf');
+}
+
+// ================================================================
+// DOWNLOADS
+// ================================================================
+var PORTAL_DADOS_URL = 'https://dados.mg.gov.br/dataset/portal_ordem_cronologica';
+
+var ARQUIVOS_DL = [
+    {
+        ano: '2026',
+        url: 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/pagamentos2026.csv',
+        nome: 'pagamentos2026.csv'
+    },
+    {
+        ano: '2025',
+        url: 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/pagamentos2025.csv',
+        nome: 'pagamentos2025.csv'
+    },
+    {
+        ano: '2024',
+        url: 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/pagamentos2024.csv',
+        nome: 'pagamentos2024.csv'
+    },
+    {
+        ano: '2023',
+        url: 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/pagamentos2023.csv',
+        nome: 'pagamentos2023.csv'
+    }
+];
+
+async function baixarArquivoDL(url, nomeArquivo, btnId) {
+    var btn = $id(btnId);
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spin"><i class="material-icons" style="font-size:13px">refresh</i></span> Baixando...';
+    }
+    try {
+        var resp = await fetch(url);
+        if (!resp.ok) throw new Error('Falha HTTP ' + resp.status);
+        var texto = await resp.text();
+        var blob = new Blob([texto], { type: 'text/csv;charset=utf-8;' });
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = nomeArquivo;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(a.href);
+        // Toast reutilizado
+        var t = $id('toastSucesso');
+        t.querySelector('span:last-child') && (t.querySelector('.toast-content span') ? t.querySelector('.toast-content span').textContent = nomeArquivo + ' baixado com sucesso!' : null);
+        mostrarToast();
+    } catch(e) {
+        alert('Erro ao baixar o arquivo. Tente novamente.');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="material-icons" style="font-size:13px">download</i> ' + nomeArquivo.replace('pagamentos','').replace('.csv','');
+        }
+    }
+}
+
+function renderDownloads() {
+    var html = '';
+
+    // Banner Portal de Dados Abertos
+    html += '<div class="dl-portal-banner">'
+        + '<div class="dl-portal-text">'
+        + '<p>Portal de Dados Abertos</p>'
+        + '<span>Acesse o dataset completo, metadados, histórico de atualizações e documentação técnica</span>'
+        + '</div>'
+        + '<a href="' + PORTAL_DADOS_URL + '" target="_blank" class="btn-portal">'
+        + '<i class="material-icons" style="color:#b93c42;font-size:16px">open_in_new</i> Acessar Portal de Dados MG'
+        + '</a>'
+        + '</div>';
+
+    // Seção arquivos CSV
+    html += '<div class="filter-container">';
+    html += '<div class="dl-section-title">'
+        + '<i class="material-icons" style="font-size:20px;color:#20445d;">folder_open</i>'
+        + '<span>Arquivos CSV — Ordem Cronológica de Pagamentos</span>'
+        + '</div>';
+    html += '<p style="font-size:12px;color:#6c757d;margin-bottom:16px;">'
+        + 'Baixe os arquivos de pagamentos por ano. Cada arquivo contém todos os registros com data de pagamento, '
+        + 'posição na fila cronológica e indicador de quebra de ordem, separados por categorias de despesa.'
+        + '</p>';
+
+    // Descrição das colunas principais
+    html += '<div style="background:#f8fafd;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-bottom:20px;font-size:12px;color:#334155;">'
+        + '<strong style="color:#1a3a5c;">Conteúdo dos arquivos:</strong> cada linha representa uma liquidação/pagamento com campos de '
+        + '<em>ano, mês, unidade orçamentária, número de empenho, elemento e item de despesa, fonte de recurso, credor, '
+        + 'datas de liquidação e pagamento, valor pago e posição na ordem cronológica.</em>'
+        + '</div>';
+
+    html += '<div class="dl-btn-group">';
+    ARQUIVOS_DL.forEach(function(arq) {
+        var btnId = 'btn-dl-' + arq.ano;
+        html += '<button class="btn-dl" id="' + btnId + '" onclick="baixarArquivoDL(\'' + arq.url + '\',\'' + arq.nome + '\',\'' + btnId + '\')">'
+            + '<i class="material-icons" style="font-size:13px">download</i> ' + arq.ano
+            + '</button>';
+    });
+    html += '</div>';
+    html += '</div>';
+
+    // Voltar ao topo
+    html += '<div style="display:flex;justify-content:flex-end;margin-top:12px;margin-bottom:8px;">'
+        + '<button class="btn-topo" onclick="voltarAoTopo()">'
+        + '<i class="material-icons">arrow_upward</i> Voltar ao topo</button>'
+        + '</div>';
+
+    $id('c-downloads').innerHTML = html;
+    setTimeout(iframeUpdateHeight, 300);
+}
+
+// ================================================================
+// DICIONÁRIO DE DADOS
+// ================================================================
+var DICIONARIO_CAMPOS = [
+    { tabela: 'ordem_cronologica_pagamentos', campo: 'ano',                    descricao: 'Ano de exercício fiscal do pagamento (ex: 2026)',                                                tipo: 'Número (AAAA)' },
+    { tabela: 'ordem_cronologica_pagamentos', campo: 'mes',                    descricao: 'Mês de referência do pagamento, podendo aparecer como nome (Janeiro) ou número (1 a 12)',         tipo: 'Texto / Número' },
+    { tabela: 'ordem_cronologica_pagamentos', campo: 'codigo_uo',              descricao: 'Código numérico da unidade orçamentária responsável pelo pagamento no SIAFI/SIAD',                tipo: 'Número inteiro' },
+    { tabela: 'ordem_cronologica_pagamentos', campo: 'unidade_uo',             descricao: 'Nome oficial da unidade orçamentária / órgão responsável pelo pagamento',                        tipo: 'Texto' },
+    { tabela: 'ordem_cronologica_pagamentos', campo: 'numero_empenho',         descricao: 'Número sequencial do empenho no exercício fiscal ao qual o pagamento está vinculado',             tipo: 'Número inteiro' },
+    { tabela: 'ordem_cronologica_pagamentos', campo: 'data_empenho',           descricao: 'Data de registro do empenho original (DD/MM/AAAA)',                                             tipo: 'Data' },
+    { tabela: 'ordem_cronologica_pagamentos', campo: 'elemento_despesa',       descricao: 'Categoria de despesa de nível intermediário conforme classificação orçamentária (ex: Material de Consumo, Serviços de Terceiros)',  tipo: 'Texto' },
+    { tabela: 'ordem_cronologica_pagamentos', campo: 'item_despesa',           descricao: 'Subcategoria detalhada de despesa, desdobramento do elemento (ex: Combustíveis para Veículos, Medicamentos)',                     tipo: 'Texto' },
+    { tabela: 'ordem_cronologica_pagamentos', campo: 'codigo_fonte',           descricao: 'Código da fonte de recurso que financiou a despesa',                                            tipo: 'Número inteiro' },
+    { tabela: 'ordem_cronologica_pagamentos', campo: 'descricao_fonte',        descricao: 'Descrição da fonte de recurso correspondente ao código',                                        tipo: 'Texto' },
+    { tabela: 'ordem_cronologica_pagamentos', campo: 'cnpj_cpf',              descricao: 'CNPJ ou CPF do credor/beneficiário do pagamento (somente dígitos ou com formatação)',             tipo: 'Texto' },
+    { tabela: 'ordem_cronologica_pagamentos', campo: 'razao_social_credor',    descricao: 'Razão social ou nome do credor que recebeu o pagamento',                                        tipo: 'Texto' },
+    { tabela: 'ordem_cronologica_pagamentos', campo: 'sequencial_liquidacao',  descricao: 'Número sequencial da liquidação vinculada ao empenho',                                          tipo: 'Número inteiro' },
+    { tabela: 'ordem_cronologica_pagamentos', campo: 'id_liq',                 descricao: 'Identificador interno da liquidação no sistema SIAFI/SIAD',                                     tipo: 'Número inteiro' },
+    { tabela: 'ordem_cronologica_pagamentos', campo: 'data_liquidacao',        descricao: 'Data em que a despesa foi liquidada, após verificação do fornecimento do bem ou serviço (DD/MM/AAAA)', tipo: 'Data' },
+    { tabela: 'ordem_cronologica_pagamentos', campo: 'data_pagamento',         descricao: 'Data em que o pagamento foi efetivamente realizado ao credor (DD/MM/AAAA). Campo central para a análise cronológica.', tipo: 'Data' },
+    { tabela: 'ordem_cronologica_pagamentos', campo: 'valor_despesa_liquidada',descricao: 'Valor liquidado da despesa (após verificação do serviço/produto recebido). Pode aparecer como valor_despesa_realizada em alguns arquivos', tipo: 'Moeda (R$)' },
+    { tabela: 'ordem_cronologica_pagamentos', campo: 'valor_pago_financeiro',  descricao: 'Valor efetivamente pago ao credor no exercício corrente. Campo principal para totalização de pagamentos',                         tipo: 'Moeda (R$)' },
+    { tabela: 'ordem_cronologica_pagamentos', campo: 'ORDENACAO',              descricao: 'Posição do registro na fila cronológica calculada pelo sistema. Ordenação por: data_liquidacao ASC → data_pagamento ASC → numero_empenho ASC, agrupada por Ano + Unidade Orçamentária + Categoria de Despesa', tipo: 'Número inteiro' },
+    { tabela: 'ordem_cronologica_pagamentos', campo: 'quebra',                 descricao: 'Indicador de quebra da ordem cronológica informado no arquivo de origem: "sim" quando houve quebra justificada, "não" quando a ordem foi respeitada',  tipo: 'Texto (sim/não)' },
+    { tabela: 'ordem_cronologica_pagamentos', campo: 'justificativa',          descricao: 'Texto com o motivo da quebra de ordem cronológica, preenchido pela autoridade competente quando o campo quebra é "sim"',  tipo: 'Texto' }
+];
+
+var DIC_TOOLTIP = {
+    tabela:   'Nome da tabela/arquivo CSV de origem onde o campo está disponível.',
+    campo:    'Nome exato da coluna no arquivo CSV. Use este nome para referenciar o campo em análises e filtros.',
+    descricao:'Explicação do conteúdo, finalidade e contexto de uso do campo dentro do dataset.',
+    tipo:     'Formato do dado: Texto, Número inteiro, Número (AAAA), Data (DD/MM/AAAA), Moeda (R$) ou Booleano.'
+};
+
+function renderDicionario() {
+    var html = '';
+
+    // Barra de busca
+    html += '<div class="dic-search-bar">'
+        + '<i class="material-icons" style="font-size:24px;color:#20445d;flex-shrink:0;">menu_book</i>'
+        + '<div style="flex:1;min-width:0;">'
+        + '<div style="font-size:14px;font-weight:700;color:#20445d;margin-bottom:2px;">Dicionário de Dados — Ordem Cronológica de Pagamentos</div>'
+        + '<div style="font-size:12px;color:#6c757d;">Descrição de todas as colunas do arquivo CSV de pagamentos</div>'
+        + '</div>'
+        + '<input type="text" id="dicBuscaInput" class="form-control" style="height:36px;font-size:12px;max-width:300px;padding:4px 12px;" placeholder="Buscar campo ou descrição..." oninput="buscarDic(this.value)">'
+        + '</div>';
+
+    // Tabela
+    html += '<div class="dic-header-box">'
+        + '<i class="material-icons" style="font-size:16px;">table_chart</i>'
+        + ' Campos do Dataset'
+        + '<span class="dic-count-badge">' + DICIONARIO_CAMPOS.length + ' campos</span>'
+        + '</div>';
+
+    html += '<div class="dic-table-wrap">'
+        + '<div style="overflow-x:auto;">'
+        + '<table class="dic-tbl" id="dicTabela">'
+        + '<thead><tr>'
+        + '<th>Tabela <i class="dic-th-icon" data-tip="' + DIC_TOOLTIP.tabela + '">?</i></th>'
+        + '<th>Campo <i class="dic-th-icon" data-tip="' + DIC_TOOLTIP.campo + '">?</i></th>'
+        + '<th>Descrição <i class="dic-th-icon" data-tip="' + DIC_TOOLTIP.descricao + '">?</i></th>'
+        + '<th style="white-space:nowrap;">Tipo de Dado <i class="dic-th-icon" data-tip="' + DIC_TOOLTIP.tipo + '">?</i></th>'
+        + '</tr></thead>'
+        + '<tbody id="dicTbody">'
+        + renderDicLinhas(DICIONARIO_CAMPOS)
+        + '</tbody>'
+        + '</table>'
+        + '</div>'
+        + '</div>';
+
+    // Nota metodológica
+    html += '<div class="filter-container" style="margin-top:0;">'
+        + '<div class="dl-section-title">'
+        + '<i class="material-icons" style="font-size:18px;color:#20445d;">info</i>'
+        + '<span>Nota Metodológica — Ordem Cronológica</span>'
+        + '</div>'
+        + '<div style="font-size:12px;color:#334155;line-height:1.7;">'
+        + '<p style="margin-bottom:8px;">A <strong>ordem cronológica de pagamentos</strong> é um princípio da administração pública que determina que os credores '
+        + 'cujas despesas foram liquidadas primeiro devem ser pagos em ordem preferencial, salvo situações excepcionais justificadas.</p>'
+        + '<p style="margin-bottom:8px;"><strong>Agrupamento:</strong> a análise é feita por grupo composto por <em>Ano + Unidade Orçamentária + Categoria de Despesa</em>. '
+        + 'Cada grupo tem sua própria fila cronológica independente.</p>'
+        + '<p style="margin-bottom:8px;"><strong>Critério de ordenação da fila:</strong> '
+        + '<code style="background:#e2e8f0;padding:1px 5px;border-radius:3px;font-size:11px;">data_liquidacao ASC</code> → '
+        + '<code style="background:#e2e8f0;padding:1px 5px;border-radius:3px;font-size:11px;">data_pagamento ASC</code> → '
+        + '<code style="background:#e2e8f0;padding:1px 5px;border-radius:3px;font-size:11px;">numero_empenho ASC</code></p>'
+        + '<p style="margin-bottom:0;"><strong>Quebra de ordem:</strong> ocorre quando um registro anterior na fila possui '
+        + '<em>data_pagamento</em> posterior à do registro atual, indicando que um credor de ordem superior foi pago depois '
+        + 'de um credor de ordem inferior na mesma fila.</p>'
+        + '</div>'
+        + '</div>';
+
+    // Voltar ao topo
+    html += '<div style="display:flex;justify-content:flex-end;margin-top:12px;margin-bottom:8px;">'
+        + '<button class="btn-topo" onclick="voltarAoTopo()">'
+        + '<i class="material-icons">arrow_upward</i> Voltar ao topo</button>'
+        + '</div>';
+
+    $id('c-dicionario').innerHTML = html;
+    iniciarTooltipDic();
+    setTimeout(iframeUpdateHeight, 300);
+}
+
+function renderDicLinhas(campos) {
+    return campos.map(function(c, i) {
+        return '<tr class="dic-linha" style="' + (i % 2 === 1 ? 'background:#f8fafd;' : '') + '">'
+            + '<td><code class="dic-code" style="font-size:10px;color:#20445d;">' + escapeHtml(c.tabela || '') + '</code></td>'
+            + '<td><code class="dic-code">' + escapeHtml(c.campo) + '</code></td>'
+            + '<td>' + escapeHtml(c.descricao) + '</td>'
+            + '<td><span class="dic-tipo">' + escapeHtml(c.tipo) + '</span></td>'
+            + '</tr>';
+    }).join('');
+}
+
+function buscarDic(termo) {
+    var t = (termo || '').toLowerCase().trim();
+    var tbody = $id('dicTbody');
+    if (!tbody) return;
+    if (!t) {
+        tbody.innerHTML = renderDicLinhas(DICIONARIO_CAMPOS);
+        return;
+    }
+    var filtrado = DICIONARIO_CAMPOS.filter(function(c) {
+        return (c.tabela||'').toLowerCase().includes(t) || c.campo.toLowerCase().includes(t) || c.descricao.toLowerCase().includes(t) || c.tipo.toLowerCase().includes(t);
+    });
+    if (filtrado.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" style="text-align:center;color:#6c757d;padding:20px;font-size:12px;">Nenhum campo encontrado para "' + escapeHtml(termo) + '"</td></tr>';
+    } else {
+        tbody.innerHTML = renderDicLinhas(filtrado);
+    }
+}
+
+function iniciarTooltipDic() {
+    var popup = $id('dicTooltipPopup');
+    if (!popup) return;
+    var hideTimer = null;
+
+    document.querySelectorAll('#dicTabela .dic-th-icon').forEach(function(icon) {
+        icon.addEventListener('mouseenter', function(e) {
+            clearTimeout(hideTimer);
+            var tip = this.getAttribute('data-tip');
+            if (!tip) return;
+            popup.textContent = tip;
+            popup.classList.add('visible');
+            posTooltipDic(e);
+        });
+        icon.addEventListener('mousemove', posTooltipDic);
+        icon.addEventListener('mouseleave', function() {
+            hideTimer = setTimeout(function() { popup.classList.remove('visible'); }, 120);
+        });
+    });
+
+    function posTooltipDic(e) {
+        var pw = popup.offsetWidth || 220;
+        var ph = popup.offsetHeight || 40;
+        var x = e.clientX - pw / 2;
+        var y = e.clientY - ph - 14;
+        x = Math.max(8, Math.min(x, window.innerWidth - pw - 8));
+        if (y < 8) y = e.clientY + 20;
+        popup.style.left = x + 'px';
+        popup.style.top  = y + 'px';
+    }
+}
+
+// ================================================================
+// INIT
+// ================================================================
+document.addEventListener('DOMContentLoaded', init);
+
+// ================================================================
+// IFRAME RESIZE
+// ================================================================
+(function(){
+    function h(){
+        var v=Math.max(document.body.scrollHeight,document.documentElement.scrollHeight)+10;
+        try{window.parent.postMessage({iframeHeight:v,iframeResize:true,type:'resize'},'*');}catch(e){}
+    }
+    if(window.ResizeObserver) new ResizeObserver(h).observe(document.body);
+    else{ window.addEventListener('resize',h); setInterval(h,2000); }
+    h();
+})();
+</script>
+</body>
+</html>
