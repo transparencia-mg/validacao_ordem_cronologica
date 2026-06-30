@@ -1,6 +1,6 @@
 {
   "version": "4.16.6",
-  "time": 1.228,
+  "time": 0.076,
   "errors": [],
   "tasks": [
     {
@@ -12,8 +12,8 @@
         "encoding": "utf-8-sig",
         "format": "csv",
         "hashing": "md5",
-        "name": "pagamentos2026",
-        "path": "data/pagamentos2026.csv",
+        "name": "ordemcronologica_2026",
+        "path": "data/ordemcronologica_2026.csv",
         "profile": "tabular-data-resource",
         "schema": {
           "fields": [
@@ -22,31 +22,43 @@
               "type": "integer"
             },
             {
-              "name": "mes",
-              "type": "string"
-            },
-            {
-              "name": "codigo_uo",
+              "name": "codigo_unidade_orcamentaria",
               "type": "integer"
             },
             {
-              "name": "unidade_uo",
+              "name": "nome_unidade_orcamentaria",
               "type": "string"
             },
             {
-              "name": "elemento_despesa",
-              "type": "string"
-            },
-            {
-              "name": "item_despesa",
-              "type": "string"
-            },
-            {
-              "name": "codigo_fonte",
+              "name": "codigo_unidade_executora",
               "type": "integer"
             },
             {
-              "name": "descricao_fonte",
+              "name": "funcional_programatica",
+              "type": "string"
+            },
+            {
+              "name": "codigo_elemento_despesa",
+              "type": "integer"
+            },
+            {
+              "name": "descricao_elemento_despesa",
+              "type": "string"
+            },
+            {
+              "name": "codigo_item_despesa",
+              "type": "integer"
+            },
+            {
+              "name": "descricao_item_despesa",
+              "type": "string"
+            },
+            {
+              "name": "codigo_fonte_recurso",
+              "type": "integer"
+            },
+            {
+              "name": "descricao_fonte_recurso",
               "type": "string"
             },
             {
@@ -58,39 +70,51 @@
               "type": "string"
             },
             {
-              "name": "cnpj_cpf",
-              "type": "string"
-            },
-            {
               "name": "razao_social_credor",
               "type": "string"
             },
             {
-              "name": "sequencial_liquidacao",
-              "type": "integer"
+              "name": "cnpj_cpf_credor",
+              "type": "string"
             },
             {
               "name": "data_liquidacao",
               "type": "string"
             },
             {
-              "name": "valor_despesa_realizada",
+              "name": "liquidacao_sequencial",
+              "type": "integer"
+            },
+            {
+              "name": "valor_despesa_liquidada",
               "type": "string"
             },
             {
-              "name": "id_liq",
+              "name": "numero_op",
               "type": "integer"
+            },
+            {
+              "name": "data_registro",
+              "type": "string"
             },
             {
               "name": "data_pagamento",
               "type": "string"
             },
             {
-              "name": "quebra",
+              "name": "valor_pago_financeiro",
+              "type": "string"
+            },
+            {
+              "name": "quebra_sim_nao",
               "type": "any"
             },
             {
               "name": "justificativa",
+              "type": "any"
+            },
+            {
+              "name": "observacao_script",
               "type": "any"
             }
           ]
@@ -98,13 +122,13 @@
         "scheme": "file",
         "title": "Insira um título humanamente legível para este recurso.",
         "stats": {
-          "hash": "88d5424217bfb6735470ea4369404ad9",
-          "bytes": 11484978,
-          "fields": 19,
-          "rows": 38111
+          "hash": "b6ff920dba5f99a071218029d9998fb9",
+          "bytes": 103814,
+          "fields": 25,
+          "rows": 273
         }
       },
-      "time": 1.201,
+      "time": 0.042,
       "scope": [
         "hash-count-error",
         "byte-count-error",
