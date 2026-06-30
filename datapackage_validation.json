@@ -1,6 +1,6 @@
 {
   "version": "4.16.6",
-  "time": 0.074,
+  "time": 1.261,
   "errors": [],
   "tasks": [
     {
@@ -122,13 +122,166 @@
         "scheme": "file",
         "title": "Insira um título humanamente legível para este recurso.",
         "stats": {
+          "hash": "6438a0b4bd0f33a3282b766374f9b8a2",
+          "bytes": 10139660,
+          "fields": 25,
+          "rows": 28752
+        }
+      },
+      "time": 1.171,
+      "scope": [
+        "hash-count-error",
+        "byte-count-error",
+        "field-count-error",
+        "row-count-error",
+        "blank-header",
+        "extra-label",
+        "missing-label",
+        "blank-label",
+        "duplicate-label",
+        "incorrect-label",
+        "blank-row",
+        "primary-key-error",
+        "foreign-key-error",
+        "extra-cell",
+        "missing-cell",
+        "type-error",
+        "constraint-error",
+        "unique-error"
+      ],
+      "partial": false,
+      "errors": [],
+      "stats": {
+        "errors": 0
+      },
+      "valid": true
+    },
+    {
+      "resource": {
+        "description": "Insira a descrição/explicação detalhada deste recurso.",
+        "dialect": {
+          "delimiter": ";"
+        },
+        "encoding": "utf-8-sig",
+        "format": "csv",
+        "hashing": "md5",
+        "name": "pagamentos2026",
+        "path": "data/pagamentos2026.csv",
+        "profile": "tabular-data-resource",
+        "schema": {
+          "fields": [
+            {
+              "name": "ano",
+              "type": "integer"
+            },
+            {
+              "name": "codigo_unidade_orcamentaria",
+              "type": "integer"
+            },
+            {
+              "name": "nome_unidade_orcamentaria",
+              "type": "string"
+            },
+            {
+              "name": "codigo_unidade_executora",
+              "type": "integer"
+            },
+            {
+              "name": "funcional_programatica",
+              "type": "string"
+            },
+            {
+              "name": "codigo_elemento_despesa",
+              "type": "integer"
+            },
+            {
+              "name": "descricao_elemento_despesa",
+              "type": "string"
+            },
+            {
+              "name": "codigo_item_despesa",
+              "type": "integer"
+            },
+            {
+              "name": "descricao_item_despesa",
+              "type": "string"
+            },
+            {
+              "name": "codigo_fonte_recurso",
+              "type": "integer"
+            },
+            {
+              "name": "descricao_fonte_recurso",
+              "type": "string"
+            },
+            {
+              "name": "numero_empenho",
+              "type": "integer"
+            },
+            {
+              "name": "data_empenho",
+              "type": "string"
+            },
+            {
+              "name": "razao_social_credor",
+              "type": "string"
+            },
+            {
+              "name": "cnpj_cpf_credor",
+              "type": "string"
+            },
+            {
+              "name": "data_liquidacao",
+              "type": "string"
+            },
+            {
+              "name": "liquidacao_sequencial",
+              "type": "integer"
+            },
+            {
+              "name": "valor_despesa_liquidada",
+              "type": "string"
+            },
+            {
+              "name": "numero_op",
+              "type": "integer"
+            },
+            {
+              "name": "data_registro",
+              "type": "string"
+            },
+            {
+              "name": "data_pagamento",
+              "type": "string"
+            },
+            {
+              "name": "valor_pago_financeiro",
+              "type": "string"
+            },
+            {
+              "name": "quebra_sim_nao",
+              "type": "any"
+            },
+            {
+              "name": "justificativa",
+              "type": "any"
+            },
+            {
+              "name": "observacao_script",
+              "type": "any"
+            }
+          ]
+        },
+        "scheme": "file",
+        "title": "Insira um título humanamente legível para este recurso.",
+        "stats": {
           "hash": "b6ff920dba5f99a071218029d9998fb9",
           "bytes": 103814,
           "fields": 25,
           "rows": 273
         }
       },
-      "time": 0.042,
+      "time": 0.041,
       "scope": [
         "hash-count-error",
         "byte-count-error",
@@ -159,7 +312,7 @@
   ],
   "stats": {
     "errors": 0,
-    "tasks": 1
+    "tasks": 2
   },
   "valid": true
 }
