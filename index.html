@@ -776,10 +776,10 @@ MESES_NOME.forEach(function(m,i){ MESES_NUM[m.toUpperCase()] = i+1; });
 var GITHUB_API  = 'https://api.github.com/repos/transparencia-mg/portal_ordem_cronologica/contents/dataset/data';
 
 var CSV_URLS = {
-    '2026': 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/ordemcronologica2026.csv',
-    '2025': 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/ordemcronologica2025.csv',
-    '2024': 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/ordemcronologica2024.csv',
-    '2023': 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/ordemcronologica2023.csv'
+    '2026': 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/pagamentos2026.csv',
+    '2025': 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/pagamentos2025.csv',
+    '2024': 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/pagamentos2024.csv',
+    '2023': 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/pagamentos2023.csv'
 };
 
 // ================================================================
@@ -826,17 +826,20 @@ function norm(s){ return String(s||'').trim().toUpperCase().replace(/\s+/g,' ');
 function normMes(mesVal){
     if(!mesVal) return '';
     var s = String(mesVal).trim();
-    if(/^\d+$/.test(s)) return s;
+    if(/^\d+$/.test(s)) return String(+s);
     var n = MESES_NUM[s.toUpperCase()];
     return n ? String(n) : s;
 }
+// Mês não vem mais como coluna própria no arquivo — é derivado da data de pagamento.
+function mesFromDataPagamento(dataStr){
+    var d = parseDate(dataStr);
+    return d ? String(d.getMonth()+1) : '';
+}
 function normRow(r){
     var row = Object.assign({}, r);
-    row._mesNum = normMes(row.mes);
-    if(!row.valor_despesa_liquidada && row.valor_despesa_realizada)
-        row.valor_despesa_liquidada = row.valor_despesa_realizada;
+    row._mesNum = mesFromDataPagamento(row.data_pagamento);
     if(!row.valor_pago_financeiro)
-        row.valor_pago_financeiro = row.valor_despesa_liquidada || row.valor_despesa_realizada || '';
+        row.valor_pago_financeiro = row.valor_despesa_liquidada || '';
     return row;
 }
 
@@ -907,7 +910,7 @@ async function setupAtualizacaoData(){
 
     // Fallback final: tenta commit do arquivo 2026
     try {
-        var r2 = await fetch('https://api.github.com/repos/transparencia-mg/portal_ordem_cronologica/commits?path=dataset/data/ordemcronologica2026.csv&per_page=1');
+        var r2 = await fetch('https://api.github.com/repos/transparencia-mg/portal_ordem_cronologica/commits?path=dataset/data/pagamentos2026.csv&per_page=1');
         if(r2.ok){
             var c2 = await r2.json();
             if(c2 && c2.length > 0){
@@ -936,7 +939,7 @@ async function carregarAno(ano){
         });
         resultado.forEach(function(row){
             var temPag = row.data_pagamento && row.data_pagamento.trim()!=='';
-            var valStr = row.valor_pago_financeiro || row.valor_despesa_realizada || row.valor_despesa_liquidada || '';
+            var valStr = row.valor_pago_financeiro || row.valor_despesa_liquidada || '';
             var val = pNum(valStr);
             if(temPag && val > 0){
                 dadosBase.push(normRow(row));
@@ -984,20 +987,25 @@ function parseDataBR(dataStr){
     return null;
 }
 
+// ================================================================
+// CÁLCULO DA POSIÇÃO NA FILA CRONOLÓGICA
+// (a quebra de ordem NÃO é calculada aqui — ela já vem pronta no
+//  arquivo de origem, nas colunas quebra_sim_nao e justificativa)
+// ================================================================
 function calcOrdem(){
     dadosOrdem = dadosBase.map(function(r){ return Object.assign({}, r, {ORDENACAO:0}); });
     var grupos = {};
     dadosOrdem.forEach(function(r, idx){
         var categoria = '';
         for(var i=0;i<CAT_IDS.length;i++){
-            if(CATS[CAT_IDS[i]].itens.has(norm(r.item_despesa))){ categoria=CAT_IDS[i]; break; }
+            if(CATS[CAT_IDS[i]].itens.has(norm(r.descricao_item_despesa))){ categoria=CAT_IDS[i]; break; }
         }
         if(!categoria){
             for(var i=0;i<CAT_IDS.length;i++){
-                if(CATS[CAT_IDS[i]].itens.has(norm(r.elemento_despesa))){ categoria=CAT_IDS[i]; break; }
+                if(CATS[CAT_IDS[i]].itens.has(norm(r.descricao_elemento_despesa))){ categoria=CAT_IDS[i]; break; }
             }
         }
-        var k = (r.ano||'')+'|'+(r.codigo_uo||'')+'|'+categoria;
+        var k = (r.ano||'')+'|'+(r.codigo_unidade_orcamentaria||'')+'|'+categoria;
         if(!grupos[k]) grupos[k]=[];
         grupos[k].push({r:r, idx:idx});
     });
@@ -1022,8 +1030,8 @@ function calcOrdem(){
 function dadosCat(catId){
     var cat=CATS[catId];
     return dadosOrdem.filter(function(r){
-        if(cat.itens.has(norm(r.item_despesa))) return true;
-        if(!r.item_despesa||r.item_despesa.trim()==='') return cat.itens.has(norm(r.elemento_despesa));
+        if(cat.itens.has(norm(r.descricao_item_despesa))) return true;
+        if(!r.descricao_item_despesa||r.descricao_item_despesa.trim()==='') return cat.itens.has(norm(r.descricao_elemento_despesa));
         return false;
     });
 }
@@ -1039,11 +1047,11 @@ function renderAba(catId){
     var anos = Object.keys(CSV_URLS).sort(function(a,b){return +b-+a;});
     var anoSel = st.ano || anos[0] || '';
 
-    // Meses disponíveis para o ano
+    // Meses disponíveis para o ano (derivados da data de pagamento)
     var mSet={}, meses=[];
     todos.filter(function(r){return String(r.ano)===anoSel;})
          .forEach(function(r){
-             var mn=r._mesNum||normMes(r.mes);
+             var mn=r._mesNum;
              if(mn&&!mSet[mn]){mSet[mn]=1;meses.push(mn);}
          });
     meses.sort(function(a,b){return +a-+b;});
@@ -1054,10 +1062,10 @@ function renderAba(catId){
     var dadosAnoMes = todos.filter(function(r){
         if(String(r.ano)!==anoSel) return false;
         // Se mês estiver selecionado no filtro de UO, restringe
-        if(mesSel && r._mesNum!==mesSel && normMes(r.mes)!==mesSel) return false;
+        if(mesSel && r._mesNum!==mesSel) return false;
         return true;
     });
-    dadosAnoMes.forEach(function(r){ if(!uoMap[r.codigo_uo]) uoMap[r.codigo_uo]=r.unidade_uo||r.codigo_uo; });
+    dadosAnoMes.forEach(function(r){ if(!uoMap[r.codigo_unidade_orcamentaria]) uoMap[r.codigo_unidade_orcamentaria]=r.nome_unidade_orcamentaria||r.codigo_unidade_orcamentaria; });
     var uoKeys = Object.keys(uoMap).sort(function(a,b){return (uoMap[a]||'').localeCompare(uoMap[b]||'','pt-BR');});
     var uoSel  = st.uo;
     var semUO  = !uoSel;
@@ -1069,8 +1077,8 @@ function renderAba(catId){
     var pronto = !semUO;
     if(pronto){
         dados = dadosAnoMes.filter(function(r){
-            if(r.codigo_uo!==uoSel) return false;
-            if(mesSel && r._mesNum!==mesSel && normMes(r.mes)!==mesSel) return false;
+            if(r.codigo_unidade_orcamentaria!==uoSel) return false;
+            if(mesSel && r._mesNum!==mesSel) return false;
             return true;
         });
         if(st.busca){
@@ -1078,7 +1086,7 @@ function renderAba(catId){
             dados=dados.filter(function(r){
                 return (r.numero_empenho||'').toLowerCase().includes(b)
                     ||(r.razao_social_credor||'').toLowerCase().includes(b)
-                    ||(r.cnpj_cpf||'').toLowerCase().includes(b);
+                    ||(r.cnpj_cpf_credor||'').toLowerCase().includes(b);
             });
         }
         dados=sortD(dados,st.sort);
@@ -1220,10 +1228,10 @@ function renderAba(catId){
 
         var linhas = '';
         if(pag.length===0){
-            linhas='<tr><td colspan="13" class="c text-muted" style="padding:20px 8px;">Nenhum registro encontrado.</td></tr>';
+            linhas='<tr><td colspan="14" class="c text-muted" style="padding:20px 8px;">Nenhum registro encontrado.</td></tr>';
         } else {
             pag.forEach(function(r){
-                var temQuebra = String(r.quebra||'').trim().toLowerCase() === 'sim';
+                var temQuebra = String(r.quebra_sim_nao||'').trim().toLowerCase() === 'sim';
                 var ordemHtml = temQuebra
                     ? '<span style="font-weight:700;color:#b93c42;" title="Quebra de ordem cronológica">'+r.ORDENACAO+'</span>'
                     : '<span style="font-weight:700;color:#28a745;">'+r.ORDENACAO+'</span>';
@@ -1233,11 +1241,12 @@ function renderAba(catId){
                     +'<td class="c">'+ordemHtml+'</td>'
                     +'<td class="c"><span class="r-link" onclick=\'abrirDet('+rs+')\'>'+escapeHtml(r.numero_empenho||'-')+'</span></td>'
                     +'<td class="c">'+fmtD(r.data_empenho)+'</td>'
-                    +'<td style="max-width:160px;white-space:normal;">'+escapeHtml(r.unidade_uo||'-')+'</td>'
-                    +'<td class="c">'+escapeHtml(r.elemento_despesa||'-')+'</td>'
-                    +'<td style="max-width:150px;white-space:normal;">'+escapeHtml(r.item_despesa||'-')+'</td>'
-                    +'<td class="c">'+escapeHtml(r.codigo_fonte||'-')+'</td>'
-                    +'<td class="c">'+fmtDoc(r.cnpj_cpf)+'</td>'
+                    +'<td style="max-width:160px;white-space:normal;">'+escapeHtml(r.nome_unidade_orcamentaria||'-')+'</td>'
+                    +'<td class="c">'+escapeHtml(r.codigo_unidade_executora||'-')+'</td>'
+                    +'<td class="c">'+escapeHtml(r.descricao_elemento_despesa||'-')+'</td>'
+                    +'<td style="max-width:150px;white-space:normal;">'+escapeHtml(r.descricao_item_despesa||'-')+'</td>'
+                    +'<td class="c">'+escapeHtml(r.codigo_fonte_recurso||'-')+'</td>'
+                    +'<td class="c">'+fmtDoc(r.cnpj_cpf_credor)+'</td>'
                     +'<td style="max-width:150px;white-space:normal;">'+escapeHtml(r.razao_social_credor||'-')+'</td>'
                     +'<td class="c">'+fmtD(r.data_liquidacao)+'</td>'
                     +'<td class="c">'+fmtD(r.data_pagamento)+'</td>'
@@ -1251,7 +1260,7 @@ function renderAba(catId){
 
         var tfoot = total>0
             ?'<tfoot><tr>'
-            +'<td colspan="9" class="r"><strong>Total da página</strong></td>'
+            +'<td colspan="10" class="r"><strong>Total da página</strong></td>'
             +'<td colspan="2"></td>'
             +'<td class="r"><strong>'+fmtM(totVal)+'</strong></td>'
             +'<td></td></tr></tfoot>'
@@ -1264,11 +1273,12 @@ function renderAba(catId){
             +'<th onclick="sortBy(\''+catId+'\',\'ORDENACAO\')" class="'+(s.col==='ORDENACAO'?s.dir:'')+'" style="min-width:60px">Ordem</th>'
             +th('numero_empenho','Nº Empenho',90)
             +th('data_empenho','Dt. Empenho',90)
-            +th('unidade_uo','Unid. Orçamentária',160)
-            +th('elemento_despesa','Elem. Despesa',110)
-            +th('item_despesa','Item Despesa',130)
-            +th('codigo_fonte','Fonte',60)
-            +th('cnpj_cpf','CNPJ/CPF',110)
+            +th('nome_unidade_orcamentaria','Unid. Orçamentária',160)
+            +th('codigo_unidade_executora','Unid. Executora',90)
+            +th('descricao_elemento_despesa','Elem. Despesa',110)
+            +th('descricao_item_despesa','Item Despesa',130)
+            +th('codigo_fonte_recurso','Fonte',60)
+            +th('cnpj_cpf_credor','CNPJ/CPF',110)
             +th('razao_social_credor','Credor',130)
             +th('data_liquidacao','Dt. Liquidação',95)
             +th('data_pagamento','Dt. Pagamento',95)
@@ -1332,14 +1342,38 @@ function escapeAttr(s){
 // ================================================================
 function sortD(dados,s){
     var col=s.col, dir=s.dir==='asc'?1:-1;
-    var datas=['data_empenho','data_liquidacao','data_pagamento'];
-    var nums=['valor_pago_financeiro','valor_despesa_liquidada','valor_despesa_realizada','ORDENACAO'];
+    var datas=['data_empenho','data_liquidacao','data_pagamento','data_registro'];
+    var nums=['valor_pago_financeiro','valor_despesa_liquidada','ORDENACAO'];
     return dados.slice().sort(function(a,b){
         var va=a[col]||'', vb=b[col]||'';
         if(datas.indexOf(col)>=0){ var da=parseDate(va),db=parseDate(vb); return dir*((da?da.getTime():0)-(db?db.getTime():0)); }
         if(nums.indexOf(col)>=0){ return dir*(pNum(va)-pNum(vb)); }
         return dir*String(va).localeCompare(String(vb),'pt-BR');
     });
+}
+
+// ================================================================
+// ORDENAÇÃO DE COLUNA (clique no cabeçalho) / PAGINAÇÃO
+// ================================================================
+function sortBy(id,col){
+    var s=ST[id].sort;
+    if(s.col===col){ s.dir = s.dir==='asc'?'desc':'asc'; }
+    else { s.col=col; s.dir='asc'; }
+    ST[id].pagina=1;
+    renderAba(id);
+}
+
+function mudarIPP(id,v){
+    ST[id].ipp = +v;
+    ST[id].pagina = 1;
+    renderAba(id);
+}
+
+function irPag(ev,id,p){
+    if(ev) ev.preventDefault();
+    if(p<1) return;
+    ST[id].pagina = p;
+    renderAba(id);
 }
 
 // ================================================================
@@ -1415,37 +1449,40 @@ function onBusca(id, v){
 // MODAL DETALHE
 // ================================================================
 function abrirDet(r){
-    var temQuebra = String(r.quebra||'').trim().toLowerCase() === 'sim';
+    var temQuebra = String(r.quebra_sim_nao||'').trim().toLowerCase() === 'sim';
     var situacaoHtml = temQuebra
         ?'<span class="badge-err">&#9888; Quebra de ordem cronológica</span>'
         :'<span class="badge-ok">&#10004; Respeitada</span>';
-    var mesNomeModal=MESES_NOME[(+r._mesNum)-1]||r.mes||'-';
+    var mesNomeModal=MESES_NOME[(+r._mesNum)-1]||'-';
     var justificativa = r.justificativa || 'Não informada';
 
     $id('modalBody').innerHTML=
         '<div class="i-sec"><h6>📋 Empenho</h6>'
         +'<div class="i-row"><div class="i-lbl">Nº Empenho</div><div class="i-val"><strong>'+escapeHtml(r.numero_empenho||'-')+'</strong></div></div>'
         +'<div class="i-row"><div class="i-lbl">Data do Empenho</div><div class="i-val">'+fmtD(r.data_empenho)+'</div></div>'
-        +'<div class="i-row"><div class="i-lbl">Ano / Mês</div><div class="i-val">'+(r.ano||'-')+' / '+mesNomeModal+'</div></div>'
-        +'<div class="i-row"><div class="i-lbl">Unidade Orçamentária</div><div class="i-val">'+escapeHtml(r.codigo_uo||'-')+' — '+escapeHtml(r.unidade_uo||'-')+'</div></div>'
-        +'<div class="i-row"><div class="i-lbl">Elemento de Despesa</div><div class="i-val">'+escapeHtml(r.elemento_despesa||'-')+'</div></div>'
-        +'<div class="i-row"><div class="i-lbl">Item de Despesa</div><div class="i-val">'+escapeHtml(r.item_despesa||'-')+'</div></div>'
-        +'<div class="i-row"><div class="i-lbl">Fonte</div><div class="i-val">'+escapeHtml(r.codigo_fonte||'-')+(r.descricao_fonte?' — '+escapeHtml(r.descricao_fonte):'')+'</div></div>'
+        +'<div class="i-row"><div class="i-lbl">Ano / Mês (pagamento)</div><div class="i-val">'+(r.ano||'-')+' / '+mesNomeModal+'</div></div>'
+        +'<div class="i-row"><div class="i-lbl">Unidade Orçamentária</div><div class="i-val">'+escapeHtml(r.codigo_unidade_orcamentaria||'-')+' — '+escapeHtml(r.nome_unidade_orcamentaria||'-')+'</div></div>'
+        +'<div class="i-row"><div class="i-lbl">Unidade Executora</div><div class="i-val">'+escapeHtml(r.codigo_unidade_executora||'-')+'</div></div>'
+        +'<div class="i-row"><div class="i-lbl">Funcional Programática</div><div class="i-val">'+escapeHtml(r.funcional_programatica||'-')+'</div></div>'
+        +'<div class="i-row"><div class="i-lbl">Elemento de Despesa</div><div class="i-val">'+escapeHtml(r.codigo_elemento_despesa||'-')+' — '+escapeHtml(r.descricao_elemento_despesa||'-')+'</div></div>'
+        +'<div class="i-row"><div class="i-lbl">Item de Despesa</div><div class="i-val">'+escapeHtml(r.codigo_item_despesa||'-')+' — '+escapeHtml(r.descricao_item_despesa||'-')+'</div></div>'
+        +'<div class="i-row"><div class="i-lbl">Fonte</div><div class="i-val">'+escapeHtml(r.codigo_fonte_recurso||'-')+(r.descricao_fonte_recurso?' — '+escapeHtml(r.descricao_fonte_recurso):'')+'</div></div>'
         +'</div>'
 
         +'<div class="i-sec"><h6>👤 Credor</h6>'
-        +'<div class="i-row"><div class="i-lbl">CNPJ / CPF</div><div class="i-val">'+fmtDoc(r.cnpj_cpf)+'</div></div>'
+        +'<div class="i-row"><div class="i-lbl">CNPJ / CPF</div><div class="i-val">'+fmtDoc(r.cnpj_cpf_credor)+'</div></div>'
         +'<div class="i-row"><div class="i-lbl">Razão Social</div><div class="i-val">'+escapeHtml(r.razao_social_credor||'-')+'</div></div>'
         +'</div>'
 
         +'<div class="i-sec"><h6>💧 Liquidação</h6>'
-        +'<div class="i-row"><div class="i-lbl">Sequencial</div><div class="i-val">'+escapeHtml(r.sequencial_liquidacao||'-')+'</div></div>'
-        +'<div class="i-row"><div class="i-lbl">ID Liquidação</div><div class="i-val">'+(r.id_liq!==undefined?r.id_liq:'-')+'</div></div>'
+        +'<div class="i-row"><div class="i-lbl">Sequencial da Liquidação</div><div class="i-val">'+escapeHtml(r.liquidacao_sequencial||'-')+'</div></div>'
         +'<div class="i-row"><div class="i-lbl">Data de Liquidação</div><div class="i-val">'+fmtD(r.data_liquidacao)+'</div></div>'
-        +'<div class="i-row"><div class="i-lbl">Valor Realizado/Liquidado</div><div class="i-val">'+fmtM(r.valor_despesa_liquidada||r.valor_despesa_realizada)+'</div></div>'
+        +'<div class="i-row"><div class="i-lbl">Valor Liquidado</div><div class="i-val">'+fmtM(r.valor_despesa_liquidada)+'</div></div>'
         +'</div>'
 
         +'<div class="i-sec"><h6>💰 Pagamento</h6>'
+        +'<div class="i-row"><div class="i-lbl">Número da OP</div><div class="i-val">'+escapeHtml(r.numero_op||'-')+'</div></div>'
+        +'<div class="i-row"><div class="i-lbl">Data de Registro</div><div class="i-val">'+fmtD(r.data_registro)+'</div></div>'
         +'<div class="i-row"><div class="i-lbl">Data de Pagamento</div><div class="i-val"><strong>'+fmtD(r.data_pagamento)+'</strong></div></div>'
         +'<div class="i-row"><div class="i-lbl">Valor Pago / Realizado</div><div class="i-val"><strong>'+fmtM(r.valor_pago_financeiro)+'</strong></div></div>'
         +'</div>'
@@ -1454,10 +1491,10 @@ function abrirDet(r){
         +'<h6>🔢 Posição na Fila</h6>'
         +'<div class="i-row"><div class="i-lbl">Ordem sequencial</div><div class="i-val"><strong style="font-size:16px;color:#1a3a5c;">'+(r.ORDENACAO||'-')+'</strong></div></div>'
         +'<div class="i-row"><div class="i-lbl">Situação</div><div class="i-val">'+situacaoHtml+'</div></div>'
-        +'<div class="i-row"><div class="i-lbl">Critério aplicado</div><div class="i-val" style="font-size:11px;color:#6c757d;">'
+        +'<div class="i-row"><div class="i-lbl">Critério de ordenação</div><div class="i-val" style="font-size:11px;color:#6c757d;">'
         +'<strong>Grupo:</strong> Ano + Unidade Orçamentária + Categoria (análise anual, sem quebra por mês)<br>'
         +'<strong>Fila:</strong> data_liquidacao ASC → data_pagamento ASC → numero_empenho ASC<br>'
-        +'<strong>Quebra:</strong> ocorre quando um registro anterior na fila possui data_pagamento maior que o atual.'
+        +'<strong>Quebra:</strong> indicador já informado no arquivo de origem (coluna quebra_sim_nao), não calculado pelo sistema.'
         +'</div></div>'
         +(temQuebra?'<div class="i-row"><div class="i-lbl">Justificativa</div><div class="i-val" style="font-size:11px;color:#6c757d;">'+escapeHtml(justificativa)+'</div></div>':'')
         +'</div>';
@@ -1472,8 +1509,8 @@ function getDadosFilt(id){
     var st=ST[id]; var todos=dadosCat(id);
     var d=todos.filter(function(r){
         if(String(r.ano)!==st.ano) return false;
-        if(st.uo && r.codigo_uo!==st.uo) return false;
-        if(st.mes && r._mesNum!==st.mes && normMes(r.mes)!==st.mes) return false;
+        if(st.uo && r.codigo_unidade_orcamentaria!==st.uo) return false;
+        if(st.mes && r._mesNum!==st.mes) return false;
         return true;
     });
     if(st.busca){var b=st.busca.toLowerCase();d=d.filter(function(r){return(r.numero_empenho||'').toLowerCase().includes(b)||(r.razao_social_credor||'').toLowerCase().includes(b);});}
@@ -1499,14 +1536,15 @@ function expPDF(id){
     doc.text(cat.label+' — '+mesStr+'/'+st.ano,14,12);
     doc.autoTable({
         startY:18,
-        head:[['Ordem','Nº Empenho','Dt. Empenho','Unid. Orçamentária','CNPJ/CPF','Credor','Dt. Liquidação','Dt. Pagamento','Vl. Pago','Situação']],
+        head:[['Ordem','Nº Empenho','Dt. Empenho','Unid. Orçamentária','Unid. Executora','CNPJ/CPF','Credor','Dt. Liquidação','Dt. Pagamento','Vl. Pago','Situação']],
         body:d.slice(0,500).map(function(r){return[
             r.ORDENACAO||'-',r.numero_empenho||'-',fmtD(r.data_empenho),
-            (r.codigo_uo||'-')+' — '+(r.unidade_uo||'-'),
-            fmtDoc(r.cnpj_cpf),r.razao_social_credor||'-',
+            (r.codigo_unidade_orcamentaria||'-')+' — '+(r.nome_unidade_orcamentaria||'-'),
+            r.codigo_unidade_executora||'-',
+            fmtDoc(r.cnpj_cpf_credor),r.razao_social_credor||'-',
             fmtD(r.data_liquidacao),fmtD(r.data_pagamento),
             fmtM(r.valor_pago_financeiro),
-            String(r.quebra||'').trim().toLowerCase()==='sim'?'Quebra':'OK'
+            String(r.quebra_sim_nao||'').trim().toLowerCase()==='sim'?'Quebra':'OK'
         ];}),
         styles:{fontSize:6},
         headStyles:{fillColor:[32,68,93]},
@@ -1526,22 +1564,22 @@ var PORTAL_DADOS_URL = 'https://dados.mg.gov.br/dataset/portal_ordem_cronologica
 var ARQUIVOS_DL = [
     {
         ano: '2026',
-        url: 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/ordemcronologica2026.csv',
+        url: 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/pagamentos2026.csv',
         nome: 'pagamentos2026.csv'
     },
     {
         ano: '2025',
-        url: 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/ordemcronologica2025.csv',
+        url: 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/pagamentos2025.csv',
         nome: 'pagamentos2025.csv'
     },
     {
         ano: '2024',
-        url: 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/ordemcronologica2024.csv',
+        url: 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/pagamentos2024.csv',
         nome: 'pagamentos2024.csv'
     },
     {
         ano: '2023',
-        url: 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/ordemcronologica2023.csv',
+        url: 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/pagamentos2023.csv',
         nome: 'pagamentos2023.csv'
     }
 ];
@@ -1599,15 +1637,15 @@ function renderDownloads() {
         + '<span>Arquivos CSV — Ordem Cronológica de Pagamentos</span>'
         + '</div>';
     html += '<p style="font-size:12px;color:#6c757d;margin-bottom:16px;">'
-        + 'Baixe os arquivos de pagamentos por ano. Cada arquivo contém todos os registros com data de pagamento, '
-        + 'posição na fila cronológica e indicador de quebra de ordem, separados por categorias de despesa.'
+        + 'Baixe os arquivos de pagamentos por ano (pagamentosAAAA.csv). Cada arquivo contém todos os registros com data de pagamento, '
+        + 'indicador de quebra de ordem e justificativa já informados na origem, separados por categorias de despesa.'
         + '</p>';
 
     // Descrição das colunas principais
     html += '<div style="background:#f8fafd;border:1px solid #e2e8f0;border-radius:8px;padding:14px 16px;margin-bottom:20px;font-size:12px;color:#334155;">'
         + '<strong style="color:#1a3a5c;">Conteúdo dos arquivos:</strong> cada linha representa uma liquidação/pagamento com campos de '
-        + '<em>ano, mês, unidade orçamentária, número de empenho, elemento e item de despesa, fonte de recurso, credor, '
-        + 'datas de liquidação e pagamento, valor pago e posição na ordem cronológica.</em>'
+        + '<em>ano, unidade orçamentária, unidade executora, número de empenho, elemento e item de despesa, fonte de recurso, credor, '
+        + 'datas de liquidação e pagamento, valor pago e indicador de quebra de ordem com justificativa.</em>'
         + '</div>';
 
     html += '<div class="dl-btn-group">';
@@ -1634,27 +1672,31 @@ function renderDownloads() {
 // DICIONÁRIO DE DADOS
 // ================================================================
 var DICIONARIO_CAMPOS = [
-    { tabela: 'ordem_cronologica_pagamentos', campo: 'ano',                    descricao: 'Ano de exercício fiscal do pagamento (ex: 2026)',                                                tipo: 'Número (AAAA)' },
-    { tabela: 'ordem_cronologica_pagamentos', campo: 'mes',                    descricao: 'Mês de referência do pagamento, podendo aparecer como nome (Janeiro) ou número (1 a 12)',         tipo: 'Texto / Número' },
-    { tabela: 'ordem_cronologica_pagamentos', campo: 'codigo_uo',              descricao: 'Código numérico da unidade orçamentária responsável pelo pagamento no SIAFI/SIAD',                tipo: 'Número inteiro' },
-    { tabela: 'ordem_cronologica_pagamentos', campo: 'unidade_uo',             descricao: 'Nome oficial da unidade orçamentária / órgão responsável pelo pagamento',                        tipo: 'Texto' },
-    { tabela: 'ordem_cronologica_pagamentos', campo: 'numero_empenho',         descricao: 'Número sequencial do empenho no exercício fiscal ao qual o pagamento está vinculado',             tipo: 'Número inteiro' },
-    { tabela: 'ordem_cronologica_pagamentos', campo: 'data_empenho',           descricao: 'Data de registro do empenho original (DD/MM/AAAA)',                                             tipo: 'Data' },
-    { tabela: 'ordem_cronologica_pagamentos', campo: 'elemento_despesa',       descricao: 'Categoria de despesa de nível intermediário conforme classificação orçamentária (ex: Material de Consumo, Serviços de Terceiros)',  tipo: 'Texto' },
-    { tabela: 'ordem_cronologica_pagamentos', campo: 'item_despesa',           descricao: 'Subcategoria detalhada de despesa, desdobramento do elemento (ex: Combustíveis para Veículos, Medicamentos)',                     tipo: 'Texto' },
-    { tabela: 'ordem_cronologica_pagamentos', campo: 'codigo_fonte',           descricao: 'Código da fonte de recurso que financiou a despesa',                                            tipo: 'Número inteiro' },
-    { tabela: 'ordem_cronologica_pagamentos', campo: 'descricao_fonte',        descricao: 'Descrição da fonte de recurso correspondente ao código',                                        tipo: 'Texto' },
-    { tabela: 'ordem_cronologica_pagamentos', campo: 'cnpj_cpf',              descricao: 'CNPJ ou CPF do credor/beneficiário do pagamento (somente dígitos ou com formatação)',             tipo: 'Texto' },
-    { tabela: 'ordem_cronologica_pagamentos', campo: 'razao_social_credor',    descricao: 'Razão social ou nome do credor que recebeu o pagamento',                                        tipo: 'Texto' },
-    { tabela: 'ordem_cronologica_pagamentos', campo: 'sequencial_liquidacao',  descricao: 'Número sequencial da liquidação vinculada ao empenho',                                          tipo: 'Número inteiro' },
-    { tabela: 'ordem_cronologica_pagamentos', campo: 'id_liq',                 descricao: 'Identificador interno da liquidação no sistema SIAFI/SIAD',                                     tipo: 'Número inteiro' },
-    { tabela: 'ordem_cronologica_pagamentos', campo: 'data_liquidacao',        descricao: 'Data em que a despesa foi liquidada, após verificação do fornecimento do bem ou serviço (DD/MM/AAAA)', tipo: 'Data' },
-    { tabela: 'ordem_cronologica_pagamentos', campo: 'data_pagamento',         descricao: 'Data em que o pagamento foi efetivamente realizado ao credor (DD/MM/AAAA). Campo central para a análise cronológica.', tipo: 'Data' },
-    { tabela: 'ordem_cronologica_pagamentos', campo: 'valor_despesa_liquidada',descricao: 'Valor liquidado da despesa (após verificação do serviço/produto recebido). Pode aparecer como valor_despesa_realizada em alguns arquivos', tipo: 'Moeda (R$)' },
-    { tabela: 'ordem_cronologica_pagamentos', campo: 'valor_pago_financeiro',  descricao: 'Valor efetivamente pago ao credor no exercício corrente. Campo principal para totalização de pagamentos',                         tipo: 'Moeda (R$)' },
-    { tabela: 'ordem_cronologica_pagamentos', campo: 'ORDENACAO',              descricao: 'Posição do registro na fila cronológica calculada pelo sistema. Ordenação por: data_liquidacao ASC → data_pagamento ASC → numero_empenho ASC, agrupada por Ano + Unidade Orçamentária + Categoria de Despesa', tipo: 'Número inteiro' },
-    { tabela: 'ordem_cronologica_pagamentos', campo: 'quebra',                 descricao: 'Indicador de quebra da ordem cronológica informado no arquivo de origem: "sim" quando houve quebra justificada, "não" quando a ordem foi respeitada',  tipo: 'Texto (sim/não)' },
-    { tabela: 'ordem_cronologica_pagamentos', campo: 'justificativa',          descricao: 'Texto com o motivo da quebra de ordem cronológica, preenchido pela autoridade competente quando o campo quebra é "sim"',  tipo: 'Texto' }
+    { tabela: 'pagamentos', campo: 'ano',                          descricao: 'Ano de exercício fiscal do pagamento (ex: 2026)',                                                tipo: 'Número (AAAA)' },
+    { tabela: 'pagamentos', campo: 'codigo_unidade_orcamentaria',  descricao: 'Código numérico da unidade orçamentária responsável pelo pagamento no SIAFI/SIAD',                tipo: 'Número inteiro' },
+    { tabela: 'pagamentos', campo: 'nome_unidade_orcamentaria',    descricao: 'Nome oficial da unidade orçamentária / órgão responsável pelo pagamento',                        tipo: 'Texto' },
+    { tabela: 'pagamentos', campo: 'codigo_unidade_executora',     descricao: 'Código da unidade executora vinculada ao pagamento, responsável operacional pela despesa',        tipo: 'Texto / Número inteiro' },
+    { tabela: 'pagamentos', campo: 'funcional_programatica',       descricao: 'Classificação funcional-programática da despesa (função, subfunção, programa e ação orçamentária)', tipo: 'Texto' },
+    { tabela: 'pagamentos', campo: 'codigo_elemento_despesa',      descricao: 'Código da categoria de despesa de nível intermediário conforme classificação orçamentária',        tipo: 'Número inteiro' },
+    { tabela: 'pagamentos', campo: 'descricao_elemento_despesa',   descricao: 'Descrição da categoria de despesa de nível intermediário (ex: Material de Consumo, Serviços de Terceiros)', tipo: 'Texto' },
+    { tabela: 'pagamentos', campo: 'codigo_item_despesa',          descricao: 'Código do item de despesa, desdobramento do elemento de despesa',                                tipo: 'Número inteiro' },
+    { tabela: 'pagamentos', campo: 'descricao_item_despesa',       descricao: 'Descrição do item de despesa, desdobramento do elemento (ex: Combustíveis para Veículos, Medicamentos)', tipo: 'Texto' },
+    { tabela: 'pagamentos', campo: 'codigo_fonte_recurso',         descricao: 'Código da fonte de recurso que financiou a despesa',                                            tipo: 'Número inteiro' },
+    { tabela: 'pagamentos', campo: 'descricao_fonte_recurso',      descricao: 'Descrição da fonte de recurso correspondente ao código',                                        tipo: 'Texto' },
+    { tabela: 'pagamentos', campo: 'numero_empenho',                descricao: 'Número sequencial do empenho no exercício fiscal ao qual o pagamento está vinculado',             tipo: 'Número inteiro' },
+    { tabela: 'pagamentos', campo: 'data_empenho',                  descricao: 'Data de registro do empenho original (DD/MM/AAAA)',                                             tipo: 'Data' },
+    { tabela: 'pagamentos', campo: 'razao_social_credor',          descricao: 'Razão social ou nome do credor que recebeu o pagamento',                                        tipo: 'Texto' },
+    { tabela: 'pagamentos', campo: 'cnpj_cpf_credor',              descricao: 'CNPJ ou CPF do credor/beneficiário do pagamento (somente dígitos ou com formatação)',             tipo: 'Texto' },
+    { tabela: 'pagamentos', campo: 'data_liquidacao',               descricao: 'Data em que a despesa foi liquidada, após verificação do fornecimento do bem ou serviço (DD/MM/AAAA)', tipo: 'Data' },
+    { tabela: 'pagamentos', campo: 'liquidacao_sequencial',         descricao: 'Número sequencial da liquidação vinculada ao empenho',                                          tipo: 'Número inteiro' },
+    { tabela: 'pagamentos', campo: 'valor_despesa_liquidada',       descricao: 'Valor liquidado da despesa, após verificação do serviço/produto recebido',                      tipo: 'Moeda (R$)' },
+    { tabela: 'pagamentos', campo: 'numero_op',                     descricao: 'Número da Ordem de Pagamento (OP) emitida para quitação do credor',                             tipo: 'Texto / Número inteiro' },
+    { tabela: 'pagamentos', campo: 'data_registro',                 descricao: 'Data de registro da Ordem de Pagamento no sistema (DD/MM/AAAA)',                                tipo: 'Data' },
+    { tabela: 'pagamentos', campo: 'data_pagamento',                descricao: 'Data em que o pagamento foi efetivamente realizado ao credor (DD/MM/AAAA). Campo central para a análise cronológica e também usado para derivar o mês do registro.', tipo: 'Data' },
+    { tabela: 'pagamentos', campo: 'valor_pago_financeiro',         descricao: 'Valor efetivamente pago ao credor no exercício corrente. Campo principal para totalização de pagamentos',                         tipo: 'Moeda (R$)' },
+    { tabela: 'pagamentos', campo: 'quebra_sim_nao',                descricao: 'Indicador de quebra da ordem cronológica já informado no arquivo de origem: "sim" quando houve quebra justificada, "não" quando a ordem foi respeitada. Não é calculado pelo sistema.',  tipo: 'Texto (sim/não)' },
+    { tabela: 'pagamentos', campo: 'justificativa',                 descricao: 'Texto com o motivo da quebra de ordem cronológica, preenchido pela autoridade competente quando o campo quebra_sim_nao é "sim"',  tipo: 'Texto' },
+    { tabela: 'pagamentos (calculado)', campo: 'ORDENACAO',         descricao: 'Posição do registro na fila cronológica, calculada pelo sistema apenas para fins de exibição. Ordenação por: data_liquidacao ASC → data_pagamento ASC → numero_empenho ASC, agrupada por Ano + Unidade Orçamentária + Categoria de Despesa', tipo: 'Número inteiro' }
 ];
 
 var DIC_TOOLTIP = {
@@ -1715,9 +1757,9 @@ function renderDicionario() {
         + '<code style="background:#e2e8f0;padding:1px 5px;border-radius:3px;font-size:11px;">data_liquidacao ASC</code> → '
         + '<code style="background:#e2e8f0;padding:1px 5px;border-radius:3px;font-size:11px;">data_pagamento ASC</code> → '
         + '<code style="background:#e2e8f0;padding:1px 5px;border-radius:3px;font-size:11px;">numero_empenho ASC</code></p>'
-        + '<p style="margin-bottom:0;"><strong>Quebra de ordem:</strong> ocorre quando um registro anterior na fila possui '
-        + '<em>data_pagamento</em> posterior à do registro atual, indicando que um credor de ordem superior foi pago depois '
-        + 'de um credor de ordem inferior na mesma fila.</p>'
+        + '<p style="margin-bottom:0;"><strong>Quebra de ordem:</strong> o indicador de quebra (coluna <code style="background:#e2e8f0;padding:1px 5px;border-radius:3px;font-size:11px;">quebra_sim_nao</code>) '
+        + 'e a respectiva <code style="background:#e2e8f0;padding:1px 5px;border-radius:3px;font-size:11px;">justificativa</code> já vêm prontos no arquivo de origem, '
+        + 'informados pela autoridade competente — o sistema não calcula a quebra, apenas exibe o que consta no dado publicado.</p>'
         + '</div>'
         + '</div>';
 
