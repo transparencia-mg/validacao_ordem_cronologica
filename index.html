@@ -776,10 +776,10 @@ MESES_NOME.forEach(function(m,i){ MESES_NUM[m.toUpperCase()] = i+1; });
 var GITHUB_API  = 'https://api.github.com/repos/transparencia-mg/portal_ordem_cronologica/contents/dataset/data';
 
 var CSV_URLS = {
-    '2026': 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/pagamentos2026.csv',
-    '2025': 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/pagamentos2025.csv',
-    '2024': 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/pagamentos2024.csv',
-    '2023': 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/pagamentos2023.csv'
+    '2026': 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/ordemcronologica2026.csv',
+    '2025': 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/ordemcronologica2025.csv',
+    '2024': 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/ordemcronologica2024.csv',
+    '2023': 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/ordemcronologica2023.csv'
 };
 
 // ================================================================
@@ -907,7 +907,7 @@ async function setupAtualizacaoData(){
 
     // Fallback final: tenta commit do arquivo 2026
     try {
-        var r2 = await fetch('https://api.github.com/repos/transparencia-mg/portal_ordem_cronologica/commits?path=dataset/data/pagamentos2026.csv&per_page=1');
+        var r2 = await fetch('https://api.github.com/repos/transparencia-mg/portal_ordem_cronologica/commits?path=dataset/data/ordemcronologica2026.csv&per_page=1');
         if(r2.ok){
             var c2 = await r2.json();
             if(c2 && c2.length > 0){
@@ -1526,22 +1526,22 @@ var PORTAL_DADOS_URL = 'https://dados.mg.gov.br/dataset/portal_ordem_cronologica
 var ARQUIVOS_DL = [
     {
         ano: '2026',
-        url: 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/pagamentos2026.csv',
+        url: 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/ordemcronologica2026.csv',
         nome: 'pagamentos2026.csv'
     },
     {
         ano: '2025',
-        url: 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/pagamentos2025.csv',
+        url: 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/ordemcronologica2025.csv',
         nome: 'pagamentos2025.csv'
     },
     {
         ano: '2024',
-        url: 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/pagamentos2024.csv',
+        url: 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/ordemcronologica2024.csv',
         nome: 'pagamentos2024.csv'
     },
     {
         ano: '2023',
-        url: 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/pagamentos2023.csv',
+        url: 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/refs/heads/main/dataset/data/ordemcronologica2023.csv',
         nome: 'pagamentos2023.csv'
     }
 ];
