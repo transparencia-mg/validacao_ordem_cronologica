@@ -684,12 +684,16 @@ function _carregarConsolidado(callback){
 }
 
 function carregarOrgaosOficiais(){
-  _carregarConsolidado(function(errC,consolidado){
-    var fonte = (!errC && consolidado && consolidado.length) ? consolidado : null;
-    if(fonte){ montarListaOrgaos(fonte); return; }
-    // Fallback: se o consolidado falhar, tenta a partir do bruto
-    _carregarBruto(function(errB,bruto){
-      if(!errB && bruto && bruto.length){ montarListaOrgaos(bruto); }
+  // A lista de unidades tem que vir da UNIÃO dos dois arquivos: o bruto (ordemcronologica_2026)
+  // traz o universo completo de unidades do mês; o consolidado (pagamentos2026) pode, em um dado
+  // momento, conter só algumas unidades já processadas — nunca deve ser a única fonte da lista,
+  // senão unidades ainda não consolidadas somem do seletor.
+  _carregarBruto(function(errB,bruto){
+    _carregarConsolidado(function(errC,consolidado){
+      var linhas=[];
+      if(!errB&&bruto) linhas=linhas.concat(bruto);
+      if(!errC&&consolidado) linhas=linhas.concat(consolidado);
+      if(linhas.length){ montarListaOrgaos(linhas); }
       else { popularSelect(); setSyncPill('err','Erro ao carregar lista'); }
     });
   });
@@ -805,8 +809,8 @@ function renderCobertura(){
   strip.innerHTML=MESES.map(function(nome,i){
     var m=i+1, est=estados[m];
     var cls=est==='ok'?'mc-ok':est==='pend'?'mc-pend':'mc-vazio';
-    var ic=est==='ok'?'check_circle':est==='pend'?'pending':'radio_button_unchecked';
-    return '<div class="mes-chip '+cls+'"><span class="mn">'+nome+'</span><i class="mi">'+ic+'</i></div>';
+    var dotCls=est==='ok'?'ld-ok':est==='pend'?'ld-pend':'ld-vazio';
+    return '<div class="mes-chip '+cls+'"><span class="mn">'+nome+'</span><span class="leg-dot '+dotCls+'" style="display:inline-block;margin-top:2px;"></span></div>';
   }).join('');
 }
 
