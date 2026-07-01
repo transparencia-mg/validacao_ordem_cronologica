@@ -324,7 +324,7 @@ tbody tr.row-new td:first-child{padding-left:9px;}
     <div class="panel">
       <div class="ph"><i class="mi">calendar_month</i><h2>Cobertura mensal do envio</h2></div>
       <div class="pb">
-        <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px;">Meses já <strong>validados</strong> (salvos no GitHub) não precisam ser alterados — envie apenas os meses <strong>pendentes</strong>. Você pode editar um mês validado se realmente precisar corrigir algo.</p>
+        <p style="color:var(--mut);font-size:11.5px;margin-bottom:12px;">Meses já <strong>validados</strong> (presentes no arquivo consolidado <code style="font-size:10px;background:#f0f3f8;padding:1px 5px;border-radius:4px;">pagamentos2026.csv</code>) não precisam ser alterados — envie apenas os meses <strong>pendentes</strong>, com registros novos que ainda não foram consolidados. Você pode editar um registro validado se realmente precisar corrigir algo.</p>
         <div class="meses-strip" id="mesesStrip"></div>
         <div class="meses-legenda">
           <span><i class="leg-dot ld-ok"></i> Validado no GitHub</span>
@@ -406,7 +406,7 @@ tbody tr.row-new td:first-child{padding-left:9px;}
         </div>
         <hr style="border:none;border-top:1px solid var(--bdr);margin-bottom:18px;">
         <h3 style="font-size:13px;font-weight:700;color:var(--pri);margin-bottom:10px;">Como funciona o envio mensal</h3>
-        <div class="aviso av-blu" style="margin-bottom:18px;"><i class="mi">info</i><div>Ao entrar na sua unidade, o painel carrega automaticamente o que já foi validado (salvo) no GitHub. Se você importar uma planilha nova cobrindo meses antigos + novos, os registros idênticos aos já validados permanecem como <strong>validados</strong>; só entram como <strong>novo</strong> ou <strong>editado</strong> os registros realmente novos ou alterados. Assim você só precisa revisar o que mudou.</div></div>
+        <div class="aviso av-blu" style="margin-bottom:18px;"><i class="mi">info</i><div>O painel usa <strong>duas fontes</strong>: <code style="font-size:10px;background:#fff;padding:1px 5px;border-radius:4px;">pagamentos2026.csv</code> (consolidado, já com as correções dos órgãos — é o que alimenta o dashboard público) define o que está <strong>VALIDADO</strong>; <code style="font-size:10px;background:#fff;padding:1px 5px;border-radius:4px;">ordemcronologica_2026.csv</code> (bruto, resetado todo mês) é usado só para detectar registros <strong>NOVOS</strong> que ainda não chegaram ao consolidado. Se um registro do bruto já existe no consolidado, o painel mantém a versão já revisada e não pede ação de novo. Assim, ao importar uma planilha cobrindo meses antigos + novos, você só revisa o que realmente é novo ou foi alterado.</div></div>
         <hr style="border:none;border-top:1px solid var(--bdr);margin-bottom:18px;">
         <h3 style="font-size:13px;font-weight:700;color:var(--pri);margin-bottom:10px;">Unidades adicionadas manualmente</h3>
         <div id="extrasLista" style="background:#f7f9fc;border:1px solid var(--bdr);border-radius:var(--r);padding:8px;max-height:200px;overflow-y:auto;font-size:12px;"></div>
@@ -504,8 +504,12 @@ tbody tr.row-new td:first-child{padding-left:9px;}
   </div>
 </div>
 <script>
-const CSV_URL = 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/main/dataset/data/ordemcronologica_2026.csv';
-const WORKER_URL = 'https://cadastros-ordem-cronologica.kbomfa.workers.dev'; // <-- ajuste a URL do seu Cloudflare Worker aqui
+// Arquivo BRUTO: vem limpo todo mês, usado só para detectar registros NOVOS que ainda não foram consolidados.
+const CSV_URL_BRUTO = 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/main/dataset/data/ordemcronologica_2026.csv';
+// Arquivo CONSOLIDADO: já reflete as correções/validações feitas pelos órgãos, alimenta o dashboard público.
+// É a fonte da verdade para o que já está "VALIDADO" no painel.
+const CSV_URL_CONSOLIDADO = 'https://raw.githubusercontent.com/transparencia-mg/portal_ordem_cronologica/main/dataset/data/pagamentos2026.csv';
+const WORKER_URL = 'https://cadastros-ordem-cronologica.kbomfa.workers.dev'; // <-- URL do Worker (SEM barra "/" no final!)
 
 // Colunas no layout oficial (ordem exata usada na exportação/gravação)
 const COLS = ['ano','codigo_unidade_orcamentaria','nome_unidade_orcamentaria','codigo_unidade_executora','funcional_programatica',
@@ -594,23 +598,33 @@ function setDadosLocal(){
   try{localStorage.setItem(K_PRE+slug(codOrgAtivo),JSON.stringify(alt));return true;}
   catch(e){toast('Erro ao salvar localmente: '+e.message,false);return false;}
 }
-function mergeDados(doOficial){
+function mergeDados(consolidadoOrg, brutoOrg){
+  // 1) Base = tudo que já está no CONSOLIDADO (pagamentos2026) -> isso é o que já foi validado/publicado
+  var base=new Map();
+  consolidadoOrg.forEach(function(r){ base.set(chaveUnica(r), Object.assign({},r,{_origem:'csv'})); });
+
+  // 2) Do arquivo BRUTO (ordemcronologica, mês corrente), só entra o que ainda NÃO existe no consolidado
+  brutoOrg.forEach(function(r){
+    var k=chaveUnica(r);
+    if(!base.has(k)){ base.set(k, Object.assign({},r,{_origem:'novo'})); }
+    // se a chave já existe no consolidado, mantemos a versão consolidada (já revisada) e ignoramos o bruto
+  });
+
+  // 3) Por cima disso, aplica qualquer alteração pendente salva localmente neste navegador
   var locais=getDadosLocal();
-  var mapaOficial=new Map();
-  doOficial.forEach(function(r){mapaOficial.set(chaveUnica(r),r);});
-  var mapaFinal=new Map(mapaOficial);
   locais.forEach(function(r){
     var k=chaveUnica(r);
-    if(mapaOficial.has(k)){
-      // Ja existe no oficial: so mantem como pendente/editado se realmente diferente
-      var oficial=mapaOficial.get(k);
-      var iguais=COLS.every(function(c){return (oficial[c]||'').toString()===(r[c]||'').toString();});
-      if(!iguais) mapaFinal.set(k, Object.assign({},r,{_origem:'editado'}));
+    var existente=base.get(k);
+    if(existente&&existente._origem==='csv'){
+      var iguais=COLS.every(function(c){return (existente[c]||'').toString()===(r[c]||'').toString();});
+      if(!iguais) base.set(k, Object.assign({},r,{_origem:'editado'}));
+      // se for igual ao consolidado, não faz nada -> continua validado
     } else {
-      mapaFinal.set(k, Object.assign({},r,{_origem: r._origem||'novo'}));
+      base.set(k, Object.assign({},r,{_origem:r._origem||'novo'}));
     }
   });
-  dados=[...mapaFinal.values()];
+
+  dados=[...base.values()];
 }
 
 // ===== SYNC PILL =====
@@ -626,8 +640,9 @@ function setSyncPill(estado,txt){
   t.textContent=txt;
 }
 
-// ===== CARREGAR DATASET OFICIAL (CSV) =====
-var _csvCache=null;
+// ===== CARREGAR DATASETS (CONSOLIDADO + BRUTO) =====
+var _csvBrutoCache=null;
+var _csvConsolidadoCache=null;
 function _normalizarRow(row){
   var n={};
   COLS.forEach(function(c){ n[c]=(row[c]!==undefined&&row[c]!==null)?row[c].toString().trim():''; });
@@ -639,48 +654,68 @@ function _normalizarRow(row){
   n.quebra_sim_nao=(n.quebra_sim_nao||'NAO').toUpperCase()==='SIM'?'SIM':'NAO';
   return n;
 }
-function _carregarCSVOficial(callback){
-  if(_csvCache){callback(null,_csvCache);return;}
+function _carregarCSV(url, cacheGetSet, label, callback){
+  var cache=cacheGetSet.get();
+  if(cache){callback(null,cache);return;}
   var lbar=document.getElementById('lbar');
   if(lbar) lbar.classList.remove('hide');
-  setSyncPill('','Carregando base oficial...');
-  fetch(CSV_URL)
+  setSyncPill('','Carregando '+label+'...');
+  fetch(url)
     .then(function(r){ if(!r.ok) throw new Error('HTTP '+r.status); return r.text(); })
     .then(function(txt){
       Papa.parse(txt,{header:true,delimiter:';',skipEmptyLines:true,
         transformHeader:function(h){return h.trim().replace(/^\ufeff/,'').toLowerCase();},
         complete:function(res){
-          _csvCache=res.data.map(_normalizarRow);
+          var linhas=res.data.map(_normalizarRow);
+          cacheGetSet.set(linhas);
           if(lbar) lbar.classList.add('hide');
-          callback(null,_csvCache);
+          callback(null,linhas);
         },
         error:function(e){ if(lbar) lbar.classList.add('hide'); callback(e,null); }
       });
     })
-    .catch(function(e){ console.warn('CSV error:',e); if(lbar) lbar.classList.add('hide'); callback(e,null); });
+    .catch(function(e){ console.warn(label+' error:',e); if(lbar) lbar.classList.add('hide'); callback(e,null); });
+}
+function _carregarBruto(callback){
+  _carregarCSV(CSV_URL_BRUTO, {get:function(){return _csvBrutoCache;},set:function(v){_csvBrutoCache=v;}}, 'base do mês (bruto)', callback);
+}
+function _carregarConsolidado(callback){
+  _carregarCSV(CSV_URL_CONSOLIDADO, {get:function(){return _csvConsolidadoCache;},set:function(v){_csvConsolidadoCache=v;}}, 'base consolidada', callback);
 }
 
 function carregarOrgaosOficiais(){
-  _carregarCSVOficial(function(err,linhas){
-    if(err){ popularSelect(); setSyncPill('err','Erro ao carregar lista'); return; }
-    var mapa=new Map();
-    linhas.forEach(function(r){ if(r.codigo_unidade_orcamentaria) mapa.set(r.codigo_unidade_orcamentaria, r.nome_unidade_orcamentaria); });
-    if(mapa.size>0){ orgaosCSV=[...mapa.entries()].map(function(e){return {codigo:e[0],nome:e[1]};}); }
-    popularSelect();
-    setSyncPill('ok','Unidades carregadas');
+  _carregarConsolidado(function(errC,consolidado){
+    var fonte = (!errC && consolidado && consolidado.length) ? consolidado : null;
+    if(fonte){ montarListaOrgaos(fonte); return; }
+    // Fallback: se o consolidado falhar, tenta a partir do bruto
+    _carregarBruto(function(errB,bruto){
+      if(!errB && bruto && bruto.length){ montarListaOrgaos(bruto); }
+      else { popularSelect(); setSyncPill('err','Erro ao carregar lista'); }
+    });
   });
+}
+function montarListaOrgaos(linhas){
+  var mapa=new Map();
+  linhas.forEach(function(r){ if(r.codigo_unidade_orcamentaria) mapa.set(r.codigo_unidade_orcamentaria, r.nome_unidade_orcamentaria); });
+  if(mapa.size>0){ orgaosCSV=[...mapa.entries()].map(function(e){return {codigo:e[0],nome:e[1]};}); }
+  popularSelect();
+  setSyncPill('ok','Unidades carregadas');
 }
 
 function carregarDadosOrgao(){
-  _csvCache=null;
-  _carregarCSVOficial(function(err,linhas){
-    if(err){ setSyncPill('err','Erro ao carregar'); return; }
-    var doOficial = linhas.filter(function(r){ return r.codigo_unidade_orcamentaria===codOrgAtivo; });
-    mergeDados(doOficial);
-    filtroAtivo='pendentes';
-    paginaAtual=1;
-    renderTudo();
-    setSyncPill('ok','Carregado');
+  _csvBrutoCache=null; _csvConsolidadoCache=null;
+  _carregarConsolidado(function(errC,consolidado){
+    _carregarBruto(function(errB,bruto){
+      if(errC && errB){ setSyncPill('err','Erro ao carregar'); toast('Não foi possível carregar os dados. Verifique a conexão.',false); return; }
+      var consolidadoOrg = (!errC&&consolidado) ? consolidado.filter(function(r){return r.codigo_unidade_orcamentaria===codOrgAtivo;}) : [];
+      var brutoOrg = (!errB&&bruto) ? bruto.filter(function(r){return r.codigo_unidade_orcamentaria===codOrgAtivo;}) : [];
+      mergeDados(consolidadoOrg, brutoOrg);
+      filtroAtivo='pendentes';
+      paginaAtual=1;
+      renderTudo();
+      if(errC){ setSyncPill('err','Base consolidada indisponível — mostrando apenas o bruto'); toast('Não consegui carregar o arquivo consolidado (pagamentos2026). Mostrando só o que veio do arquivo bruto deste mês.',false); }
+      else{ setSyncPill('ok','Carregado'); }
+    });
   });
 }
 
@@ -723,7 +758,7 @@ function entrar(){
 function trocar(){
   if(!confirm('Deseja trocar de unidade? Suas alterações locais continuarão salvas.'))return;
   orgAtivo=null;codOrgAtivo=null;localStorage.removeItem(K_ORG);dados=[];filtrados=[];
-  _csvCache=null;
+  _csvBrutoCache=null; _csvConsolidadoCache=null;
   setSyncPill('','Aguardando');
   document.getElementById('tbody').innerHTML='';
   document.getElementById('emptyDiv').style.display='none';
